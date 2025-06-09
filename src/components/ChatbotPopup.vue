@@ -43,20 +43,19 @@
         <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
           <div class="message-bubble"
                :class="{ 'loading-message': message.isLoading, 'typing-message': message.isTyping }">
-            <div v-if="message.isLoading" class="loading-spinner">
-              <div class="spinner"></div>
-            </div>
             <div v-if="message.isTyping" class="typing-indicator">
               <span class="typing-dot"></span>
               <span class="typing-dot"></span>
               <span class="typing-dot"></span>
             </div>
-            <span v-if="!message.isLoading && !message.isTyping"
+            <span v-if="!message.isTyping"
                   class="message-text"
                   :class="{ 'typewriter': message.showTypewriter }">{{
                       message.showTypewriter ? message.displayText :
                       (message.displayText !== undefined ? message.displayText : message.text)
-                  }}</span>
+                  }}<span v-if="message.isLoading" class="loading-spinner-inline">
+                    <div class="spinner"></div>
+                  </span></span>
             <span v-if="!message.isLoading && !message.isTyping" class="message-time">{{ message.time }}</span>
           </div>
         </div>
@@ -615,6 +614,21 @@ export default {
 .loading-spinner {
   display: inline-block;
   margin-right: 8px;
+}
+
+.loading-spinner-inline {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.loading-spinner-inline .spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .spinner {

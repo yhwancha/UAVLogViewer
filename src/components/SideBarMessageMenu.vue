@@ -88,22 +88,21 @@
                     >
                         <div class="message-bubble"
                              :class="{ 'loading-message': message.isLoading, 'typing-message': message.isTyping }">
-                            <div v-if="message.isLoading" class="loading-spinner">
-                                <div class="spinner"></div>
-                            </div>
                             <div v-if="message.isTyping" class="typing-indicator">
                                 <span class="typing-dot"></span>
                                 <span class="typing-dot"></span>
                                 <span class="typing-dot"></span>
                             </div>
-                            <span v-if="!message.isLoading && !message.isTyping"
+                            <span v-if="!message.isTyping"
                                   class="message-text"
-                                  :class="{ 'typewriter': message.showTypewriter }">
-                                {{
-                                    message.showTypewriter ? message.displayText :
-                                    (message.displayText !== undefined ? message.displayText : message.text)
-                                }}
-                            </span>
+                                  :class="{ 'typewriter': message.showTypewriter }"
+                            >{{
+                                message.showTypewriter ? message.displayText :
+                                (message.displayText !== undefined ? message.displayText : message.text)
+                            }}<span
+                                v-if="message.isLoading"
+                                class="loading-spinner-inline"
+                            ><div class="spinner"></div></span></span>
                             <span v-if="!message.isLoading && !message.isTyping"
                                   class="message-time">{{ message.time }}</span>
                         </div>
@@ -424,11 +423,11 @@ export default {
             // Add user message
             this.chatMessages.push({
                 type: 'user',
-                text: this.currentMessage,
+                text: this.currentMessage.trim(),
                 time: this.getCurrentTime()
             })
 
-            const userMessage = this.currentMessage
+            const userMessage = this.currentMessage.trim()
             this.currentMessage = ''
 
             // Scroll to bottom
@@ -540,8 +539,7 @@ export default {
             // Add loading message to sidebar chat
             this.chatMessages.push({
                 type: 'bot',
-                text: `📡 Analyzing flight log "${event.filename}"... ` +
-                      'This may take a moment while I parse the flight data and detect any anomalies.',
+                text: 'Analyzing flight log data...',
                 time: this.getCurrentTime(),
                 isLoading: true
             })
@@ -550,8 +548,7 @@ export default {
             if (this.popupChatMessages.length > 0) {
                 this.popupChatMessages.push({
                     type: 'assistant',
-                    text: `📡 Analyzing flight log "${event.filename}"... ` +
-                          'This may take a moment while I parse the flight data and detect any anomalies.',
+                    text: 'Analyzing flight log data...',
                     time: this.getCurrentTime(),
                     isLoading: true
                 })
@@ -568,36 +565,49 @@ export default {
             this.uploadingFilename = ''
             this.flightDataLoaded = true
 
-            const successMessage = {
-                type: 'bot',
-                text: `🎉 Great! I've successfully analyzed your flight log "${event.filename}". ` +
-                      `This ${event.flightInfo?.duration || 'flight'} mission ` +
-                      `${event.flightInfo?.vehicle_type ? `with a ${event.flightInfo.vehicle_type}` : ''} ` +
-                      'is now ready for analysis! ' +
-                      'Feel free to ask me anything about this flight - altitude patterns, GPS performance, ' +
-                      'battery usage, or any anomalies you\'d like me to investigate.',
-                time: this.getCurrentTime()
-            }
+            const successMessageText = `Flight log analysis complete! "${event.filename}" ` +
+                                     'has been successfully processed. ' +
+                                     'Feel free to ask me questions about this flight data!'
 
             // Remove any existing loading messages from sidebar chat
             this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
-            this.chatMessages.push(successMessage)
+
+            // Add success message with typing animation setup
+            const botMessage = {
+                type: 'bot',
+                text: successMessageText,
+                time: this.getCurrentTime(),
+                displayText: '',
+                showTypewriter: false,
+                _originalText: successMessageText
+            }
+            this.chatMessages.push(botMessage)
+
+            // Start typing animation for sidebar
+            this.startTypingAnimation(botMessage, botMessage._originalText)
 
             // Also update popup chat messages
             if (this.popupChatMessages.length > 0) {
                 // Remove any existing loading messages from popup chat
                 this.popupChatMessages = this.popupChatMessages.filter(msg => !msg.isLoading)
 
-                // Add success message to popup chat with correct type
-                this.popupChatMessages.push({
+                // Add success message to popup chat with typing animation setup
+                const popupMessage = {
                     type: 'assistant',
-                    text: `🎉 Great! I've successfully analyzed your flight log "${event.filename}". ` +
-                          `This ${event.flightInfo?.duration || 'flight'} mission ` +
-                          `${event.flightInfo?.vehicle_type ? `with a ${event.flightInfo.vehicle_type}` : ''} ` +
-                          'is now ready for analysis! ' +
-                          'Feel free to ask me anything about this flight - altitude patterns, GPS performance, ' +
-                          'battery usage, or any anomalies you\'d like me to investigate.',
-                    time: this.getCurrentTime()
+                    text: successMessageText,
+                    time: this.getCurrentTime(),
+                    displayText: '',
+                    showTypewriter: false,
+                    _originalText: successMessageText
+                }
+                this.popupChatMessages.push(popupMessage)
+
+                // Start typing animation for popup (if popup component exists)
+                this.$nextTick(() => {
+                    const popupComponent = this.$children.find(child => child.$options.name === 'ChatbotPopup')
+                    if (popupComponent) {
+                        popupComponent.startTypingAnimation(popupMessage, popupMessage._originalText)
+                    }
                 })
             }
 
@@ -613,7 +623,7 @@ export default {
 
             const errorMessage = {
                 type: 'bot',
-                text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
+                text: `Error analyzing flight log "${event.filename}": ${event.error}. ` +
                       'Please try uploading the file again.',
                 time: this.getCurrentTime()
             }
@@ -630,7 +640,7 @@ export default {
                 // Add error message to popup chat with correct type
                 this.popupChatMessages.push({
                     type: 'assistant',
-                    text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
+                    text: `Error analyzing flight log "${event.filename}": ${event.error}. ` +
                           'Please try uploading the file again.',
                     time: this.getCurrentTime()
                 })
@@ -645,7 +655,11 @@ export default {
         openPopupChatbot () {
             // Copy current messages to popup, or add welcome message if empty
             if (this.chatMessages.length > 0) {
-                this.popupChatMessages = [...this.chatMessages]
+                // Convert 'bot' type to 'assistant' type for popup
+                this.popupChatMessages = this.chatMessages.map(msg => ({
+                    ...msg,
+                    type: msg.type === 'bot' ? 'assistant' : msg.type
+                }))
             } else {
                 this.popupChatMessages = [{
                     type: 'assistant',
@@ -760,7 +774,7 @@ export default {
 
             // Add typing indicator message
             const typingMessage = {
-                type: 'bot',
+                type: isPopup ? 'assistant' : 'bot',
                 text: '',
                 time: '',
                 isTyping: true,
@@ -1221,6 +1235,11 @@ export default {
         transition: all 0.2s ease;
     }
 
+    .loading-message .message-bubble {
+        padding: 12px 32px 12px 16px;
+        max-width: 78%;
+    }
+
     .message-bubble:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
@@ -1246,6 +1265,13 @@ export default {
         font-weight: 400;
         margin-bottom: 6px;
         white-space: pre-wrap;
+    }
+
+    .loading-message .message-text {
+        white-space: nowrap;
+        margin-bottom: 0;
+        display: inline-flex;
+        align-items: center;
     }
 
     .message-time {
@@ -1478,6 +1504,22 @@ export default {
     .loading-spinner {
         display: inline-block;
         margin-right: 8px;
+    }
+
+    .loading-spinner-inline {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        margin-right: 4px;
+    }
+
+    .loading-spinner-inline .spinner {
+        width: 10px;
+        height: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-top: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
     }
 
     .spinner {
