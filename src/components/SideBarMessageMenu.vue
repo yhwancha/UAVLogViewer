@@ -1125,7 +1125,7 @@ export default {
 
     .send-button i {
         font-size: 15px;
-        margin-left: 2px;
+        margin-left: 1px;
         z-index: 1;
         position: relative;
     }

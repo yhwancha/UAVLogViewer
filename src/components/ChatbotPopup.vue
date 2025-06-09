@@ -450,9 +450,9 @@ export default {
 }
 
 .chat-message.assistant .message-bubble {
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
   color: #2c3e50;
-  border: 1px solid #e1e8ed;
+  border: 1px solid rgba(30, 37, 54, 0.15);
   border-bottom-left-radius: 6px;
 }
 
@@ -580,7 +580,7 @@ export default {
 
 .send-button i {
   font-size: 16px;
-  margin-left: 2px;
+  margin-left: 1px;
   z-index: 1;
   position: relative;
 }
