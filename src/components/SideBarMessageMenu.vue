@@ -55,50 +55,67 @@
         </b-collapse>
 
         <!-- Chatbot Section -->
-        <li @click="toggleChatbot">
-            <a class="section chatbot-toggle">
-                <i class="fas fa-robot"></i>
-                {{ chatbotOpen ? 'Close Chatbot' : 'Open Chatbot' }}
-                <i class="fas fa-caret-down" v-if="!chatbotOpen"></i>
-                <i class="fas fa-caret-up" v-if="chatbotOpen"></i>
-                <button
-                    @click.stop="openPopupChatbot"
-                    class="popup-button"
-                    title="Open in popup window"
-                >
-                    <i class="fas fa-external-link-alt"></i>
-                </button>
-            </a>
-        </li>
+        <div class="chatbot-section">
+            <li @click="toggleChatbot">
+                <a class="section chatbot-toggle">
+                    <i class="fas fa-robot"></i>
+                    {{ chatbotOpen ? 'Close Chatbot' : 'Open Chatbot' }}
+                    <i class="fas fa-caret-down" v-if="!chatbotOpen"></i>
+                    <i class="fas fa-caret-up" v-if="chatbotOpen"></i>
+                    <button
+                        @click.stop="openPopupChatbot"
+                        class="popup-button"
+                        title="Open in popup window"
+                    >
+                        <i class="fas fa-external-link-alt"></i>
+                    </button>
+                </a>
+            </li>
 
-        <div v-if="chatbotOpen" class="chatbot-container">
-            <div class="chat-messages" ref="chatMessages">
-                <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
-                    <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
-                        <div v-if="message.isLoading" class="loading-spinner">
-                            <div class="spinner"></div>
+            <div
+                class="chatbot-container"
+                :class="{
+                    'chatbot-visible': chatbotOpen,
+                    'chatbot-hidden': !chatbotOpen
+                }"
+            >
+                <div v-if="chatbotOpen" class="chat-messages" ref="chatMessages">
+                    <div
+                        v-for="(message, index) in chatMessages"
+                        :key="index"
+                        class="chat-message"
+                        :class="message.type"
+                    >
+                        <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
+                            <div v-if="message.isLoading" class="loading-spinner">
+                                <div class="spinner"></div>
+                            </div>
+                            <span class="message-text">{{ message.text }}</span>
+                            <span class="message-time">{{ message.time }}</span>
                         </div>
-                        <span class="message-text">{{ message.text }}</span>
-                        <span class="message-time">{{ message.time }}</span>
                     </div>
                 </div>
-            </div>
-            <div class="chat-input-container">
-                <input
-                    v-model="currentMessage"
-                    @keyup.enter="sendMessage"
-                    :placeholder="uploadingFile ? 'Analyzing flight data...' : 'Ask about flight data...'"
-                    class="chat-input"
-                    ref="chatInput"
-                    :disabled="uploadingFile"
-                />
-                <button
-                    @click="sendMessage"
-                    class="send-button"
-                    :disabled="!currentMessage.trim() || uploadingFile"
-                >
-                    <i class="fas fa-paper-plane"></i>
-                </button>
+                <div v-if="chatbotOpen" class="chat-input-container">
+                    <input
+                        v-model="currentMessage"
+                        @keyup.enter="sendMessage"
+                        :placeholder="uploadingFile ? 'Analyzing flight data...' : 'Ask about flight data...'"
+                        class="chat-input"
+                        ref="chatInput"
+                        :disabled="uploadingFile"
+                    />
+                    <button
+                        @click="sendMessage"
+                        class="send-button"
+                        :disabled="!currentMessage.trim() || uploadingFile"
+                    >
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div v-else class="chatbot-placeholder">
+                    <i class="fas fa-comment-dots"></i>
+                    <span>Chatbot is closed</span>
+                </div>
             </div>
         </div>
 
@@ -527,8 +544,19 @@ export default {
             }
         },
         openPopupChatbot () {
-            // Copy current messages to popup
-            this.popupChatMessages = [...this.chatMessages]
+            // Copy current messages to popup, or add welcome message if empty
+            if (this.chatMessages.length > 0) {
+                this.popupChatMessages = [...this.chatMessages]
+            } else {
+                this.popupChatMessages = [{
+                    type: 'assistant',
+                    text: 'Hello! I can help you analyze your UAV flight data. ' +
+                          'Upload a .bin flight log file in the main area, then ask me questions like: ' +
+                          '"What was the maximum altitude?", "Were there any GPS issues?", ' +
+                          'or "How long was the flight?" I can also answer general UAV questions.',
+                    time: this.getCurrentTime()
+                }]
+            }
             this.showPopupChatbot = true
         },
         closePopupChatbot () {
@@ -557,11 +585,12 @@ export default {
                 this.addMessageToPopup('Analyzing your question...', 'assistant', true)
 
                 const payload = {
-                    message: message,
-                    sessionId: sessionId
+                    content: message,
+                    sessionId: sessionId,
+                    timestamp: new Date().toISOString()
                 }
 
-                const response = await fetch('http://localhost:8000/api/chat', {
+                const response = await fetch('http://localhost:8001/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -578,6 +607,13 @@ export default {
                 // Remove loading message and add response
                 this.popupChatMessages.splice(loadingIndex, 1)
                 this.addMessageToPopup(data.content || 'Sorry, I could not process your request.', 'assistant')
+
+                if (data.suggested_questions && data.suggested_questions.length > 0) {
+                    this.addMessageToPopup(
+                        'You might also want to ask: ' + data.suggested_questions.join(', '),
+                        'assistant'
+                    )
+                }
             } catch (error) {
                 console.error('Error sending message to backend:', error)
                 // Remove loading message and add error
@@ -737,55 +773,136 @@ export default {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
-        padding: 12px 15px;
-        background: linear-gradient(135deg, #135388, #0f4369);
+        gap: 10px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 10px;
-        margin: 8px 0;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
+        border-radius: 12px;
+        margin: 10px 6px;
+        transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        box-shadow:
+            0 6px 24px rgba(102, 126, 234, 0.25),
+            0 2px 6px rgba(0, 0, 0, 0.08);
         position: relative;
         overflow: hidden;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.3px;
+    }
+
+    .chatbot-toggle::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .chatbot-toggle:hover::before {
+        left: 100%;
     }
 
     .chatbot-toggle:hover {
-        background: linear-gradient(135deg, #0f4369, #0a2f4d);
-        box-shadow: 0 4px 12px rgba(19, 83, 136, 0.4);
-        transform: translateY(-2px);
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        box-shadow:
+            0 8px 28px rgba(102, 126, 234, 0.35),
+            0 3px 12px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px) scale(1.01);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .chatbot-toggle:active {
+        transform: translateY(-1px) scale(1.005);
+        box-shadow:
+            0 4px 16px rgba(102, 126, 234, 0.3),
+            0 2px 6px rgba(0, 0, 0, 0.1);
     }
 
     .chatbot-toggle i {
         font-size: 16px;
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2));
+        transition: transform 0.3s ease;
+    }
+
+    .chatbot-toggle:hover i {
+        transform: scale(1.05);
     }
 
     .popup-button {
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
+        border: 1px solid rgba(255, 255, 255, 0.4);
         color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.2s ease;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         margin-left: 8px;
         flex-shrink: 0;
+        backdrop-filter: blur(8px);
+        box-shadow:
+            0 3px 8px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .popup-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .popup-button:hover::before {
+        opacity: 1;
     }
 
     .popup-button:hover {
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(1.1);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.25));
+        transform: translateY(-1px) scale(1.05);
+        box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        border-color: rgba(255, 255, 255, 0.6);
     }
 
     .popup-button:active {
-        transform: scale(0.95);
+        transform: translateY(0) scale(1.02);
+        box-shadow:
+            0 2px 6px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
     }
 
     .popup-button i {
-        font-size: 12px;
+        font-size: 13px;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+        transition: transform 0.2s ease;
+        opacity: 0.95;
+    }
+
+    .popup-button:hover i {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+
+    .chatbot-section {
+        display: flex;
+        flex-direction: column;
     }
 
     .chatbot-container {
@@ -798,10 +915,47 @@ export default {
         backdrop-filter: blur(10px);
         display: flex;
         flex-direction: column;
+        height: 380px; /* Fixed height to prevent sidebar resizing */
+        min-height: 380px;
+        max-height: 380px;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .chatbot-container.chatbot-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .chatbot-container.chatbot-hidden {
+        opacity: 0.6;
+        transform: translateY(-5px);
+    }
+
+    .chatbot-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: rgba(30, 37, 54, 0.5);
+        font-style: italic;
+        gap: 10px;
+    }
+
+    .chatbot-placeholder i {
+        font-size: 32px;
+        opacity: 0.3;
+    }
+
+    .chatbot-placeholder span {
+        font-size: 14px;
+        opacity: 0.7;
     }
 
     .chat-messages {
         height: 300px;
+        min-height: 300px;
+        max-height: 300px;
         overflow-y: auto;
         padding: 15px;
         display: flex;
@@ -809,6 +963,7 @@ export default {
         gap: 10px;
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 8px 8px 0 0;
+        flex: 1;
     }
 
     .chat-message {
