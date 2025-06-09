@@ -61,6 +61,13 @@
                 {{ chatbotOpen ? 'Close Chatbot' : 'Open Chatbot' }}
                 <i class="fas fa-caret-down" v-if="!chatbotOpen"></i>
                 <i class="fas fa-caret-up" v-if="chatbotOpen"></i>
+                <button
+                    @click.stop="openPopupChatbot"
+                    class="popup-button"
+                    title="Open in popup window"
+                >
+                    <i class="fas fa-external-link-alt"></i>
+                </button>
             </a>
         </li>
 
@@ -94,16 +101,26 @@
                 </button>
             </div>
         </div>
+
+        <!-- Chatbot Popup -->
+        <ChatbotPopup
+            :isVisible="showPopupChatbot"
+            :chatMessages="popupChatMessages"
+            :uploadingFile="uploadingFile"
+            @close="closePopupChatbot"
+            @send-message="handlePopupMessage"
+        />
     </div>
 </template>
 <script>
 import { store } from './Globals.js'
 import TreeMenu from './widgets/TreeMenu.vue'
 import fastXmlParser from 'fast-xml-parser'
+import ChatbotPopup from './ChatbotPopup.vue'
 
 export default {
     name: 'message-menu',
-    components: { TreeMenu },
+    components: { TreeMenu, ChatbotPopup },
     data () {
         return {
             filter: '',
@@ -141,7 +158,9 @@ export default {
             sessionId: null,
             flightDataLoaded: false,
             uploadingFile: false,
-            uploadingFilename: ''
+            uploadingFilename: '',
+            showPopupChatbot: false,
+            popupChatMessages: []
         }
     },
     created () {
@@ -506,6 +525,70 @@ export default {
                     this.scrollToBottom()
                 })
             }
+        },
+        openPopupChatbot () {
+            // Copy current messages to popup
+            this.popupChatMessages = [...this.chatMessages]
+            this.showPopupChatbot = true
+        },
+        closePopupChatbot () {
+            this.showPopupChatbot = false
+        },
+        handlePopupMessage (messageData) {
+            // Add user message to popup messages
+            this.addMessageToPopup(messageData.text, 'user')
+
+            // Send the message to backend
+            this.sendMessageToBackend(messageData.text, messageData.sessionId)
+        },
+        addMessageToPopup (text, type, isLoading = false) {
+            const message = {
+                text: text,
+                type: type,
+                time: new Date().toLocaleTimeString(),
+                isLoading: isLoading
+            }
+            this.popupChatMessages.push(message)
+        },
+        async sendMessageToBackend (message, sessionId) {
+            try {
+                // Add loading message to popup
+                const loadingIndex = this.popupChatMessages.length
+                this.addMessageToPopup('Analyzing your question...', 'assistant', true)
+
+                const payload = {
+                    message: message,
+                    sessionId: sessionId
+                }
+
+                const response = await fetch('http://localhost:8000/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+
+                const data = await response.json()
+
+                // Remove loading message and add response
+                this.popupChatMessages.splice(loadingIndex, 1)
+                this.addMessageToPopup(data.content || 'Sorry, I could not process your request.', 'assistant')
+            } catch (error) {
+                console.error('Error sending message to backend:', error)
+                // Remove loading message and add error
+                if (this.popupChatMessages[this.popupChatMessages.length - 1].isLoading) {
+                    this.popupChatMessages.pop()
+                }
+                this.addMessageToPopup(
+                    'Sorry, there was an error processing your request. Please try again.',
+                    'assistant'
+                )
+            }
         }
     },
     computed: {
@@ -651,17 +734,58 @@ export default {
 
     /* Chatbot Styles */
     .chatbot-toggle {
-        cursor: pointer;
-        transition: background-color 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 15px;
+        background: linear-gradient(135deg, #135388, #0f4369);
+        color: white;
+        border-radius: 10px;
+        margin: 8px 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
+        position: relative;
+        overflow: hidden;
     }
 
     .chatbot-toggle:hover {
-        background-color: rgba(30, 37, 54, 0.205);
+        background: linear-gradient(135deg, #0f4369, #0a2f4d);
+        box-shadow: 0 4px 12px rgba(19, 83, 136, 0.4);
+        transform: translateY(-2px);
     }
 
-    .chatbot-toggle i.fa-robot {
-        color: #135388;
-        margin-right: 5px;
+    .chatbot-toggle i {
+        font-size: 16px;
+    }
+
+    .popup-button {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        margin-left: 8px;
+        flex-shrink: 0;
+    }
+
+    .popup-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.1);
+    }
+
+    .popup-button:active {
+        transform: scale(0.95);
+    }
+
+    .popup-button i {
+        font-size: 12px;
     }
 
     .chatbot-container {
