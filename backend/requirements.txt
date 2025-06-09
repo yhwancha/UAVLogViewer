@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn==0.34.0
+python-multipart==0.0.20
+python-dotenv==1.0.1
+openai==1.58.1
+pydantic==2.10.3
+typing-extensions==4.12.2
+pymavlink==2.4.47
+pandas==2.2.3
+numpy==2.0.2
+lxml==5.4.0
+aiofiles==23.2.1
+httpx==0.25.2
+websockets==12.0 
