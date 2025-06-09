@@ -469,6 +469,9 @@ export default {
             this.uploadingFilename = ''
             this.flightDataLoaded = true
 
+            // Remove any existing loading messages
+            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
+
             this.chatMessages.push({
                 type: 'bot',
                 text: `✅ Flight log "${event.filename}" uploaded successfully! ` +
@@ -487,6 +490,9 @@ export default {
         handleFlightDataUploadError (event) {
             this.uploadingFile = false
             this.uploadingFilename = ''
+
+            // Remove any existing loading messages
+            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
 
             this.chatMessages.push({
                 type: 'bot',

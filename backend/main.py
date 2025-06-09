@@ -96,13 +96,28 @@ async def upload_flight_log(file: UploadFile = File(...)):
         # Clean up temp file
         os.remove(temp_path)
         
+        # Generate additional flight info
+        flight_summary = await mavlink_parser.generate_summary(parsed_data)
+        
+        # Format duration
+        duration = parsed_data.get("flight_duration", 0)
+        if duration and duration > 0:
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            duration_text = f"{minutes}m {seconds}s"
+        else:
+            duration_text = "Unknown"
+        
         response_data = {
             "message": "Flight log uploaded and parsed successfully",
             "flight_info": {
-                "duration": parsed_data.get("flight_duration", "Unknown"),
+                "duration": duration_text,
+                "duration_seconds": parsed_data.get("flight_duration", 0),
                 "messages_count": len(parsed_data.get("messages", [])),
                 "start_time": parsed_data.get("start_time", "Unknown"),
-                "vehicle_type": parsed_data.get("vehicle_type", "Unknown")
+                "vehicle_type": parsed_data.get("vehicle_type", "Unknown"),
+                "max_altitude": parsed_data.get("flight_stats", {}).get("max_altitude", "Unknown"),
+                "summary": flight_summary
             }
         }
         logger.info(f"Returning response: {response_data}")
