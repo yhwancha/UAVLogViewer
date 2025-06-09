@@ -53,6 +53,61 @@
                 </b-collapse>
             </template>
         </b-collapse>
+
+        <!-- Chatbot Section -->
+        <li @click="toggleChatbot">
+            <a class="section chatbot-toggle">
+                <i class="fas fa-robot"></i>
+                {{ chatbotOpen ? 'Close Chatbot' : 'Open Chatbot' }}
+                <i class="fas fa-caret-down" v-if="!chatbotOpen"></i>
+                <i class="fas fa-caret-up" v-if="chatbotOpen"></i>
+            </a>
+        </li>
+
+        <div v-if="chatbotOpen" class="chatbot-container">
+            <!-- File Upload Area -->
+            <div class="file-upload-area">
+                <input
+                    type="file"
+                    ref="fileInput"
+                    @change="handleFileUpload"
+                    accept=".bin"
+                    style="display: none"
+                />
+                <button @click="$refs.fileInput.click()" class="upload-button">
+                    <i class="fas fa-upload"></i>
+                    Upload Flight Log (.bin)
+                </button>
+                <div v-if="uploadStatus" class="upload-status" :class="uploadStatus.type">
+                    {{ uploadStatus.message }}
+                </div>
+            </div>
+
+            <div class="chat-messages" ref="chatMessages">
+                <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
+                    <div class="message-bubble">
+                        <span class="message-text">{{ message.text }}</span>
+                        <span class="message-time">{{ message.time }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <input
+                    v-model="currentMessage"
+                    @keyup.enter="sendMessage"
+                    placeholder="Ask about flight data..."
+                    class="chat-input"
+                    ref="chatInput"
+                />
+                <button
+                    @click="sendMessage"
+                    class="send-button"
+                    :disabled="!currentMessage.trim()"
+                >
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
     </div>
 </template>
 <script>
@@ -93,18 +148,27 @@ export default {
             messagePresets: {
             },
             userPresets: {},
-            messageDocs: {}
+            messageDocs: {},
+            chatbotOpen: false,
+            chatMessages: [],
+            currentMessage: '',
+            sessionId: null,
+            uploadStatus: null,
+            flightDataLoaded: false
         }
     },
     created () {
         this.$eventHub.$on('messageTypes', this.handleMessageTypes)
         this.$eventHub.$on('presetsChanged', this.loadLocalPresets)
+        this.$eventHub.$on('flightDataUploaded', this.handleFlightDataUploaded)
         this.messagePresets = this.loadXmlPresets()
         this.messageDocs = this.loadXmlDocs()
         this.loadLocalPresets()
     },
     beforeDestroy () {
         this.$eventHub.$off('messageTypes')
+        this.$eventHub.$off('presetsChanged')
+        this.$eventHub.$off('flightDataUploaded')
     },
     methods: {
         loadXmlPresets () {
@@ -281,6 +345,186 @@ export default {
                 return false
             }
             return true
+        },
+        toggleChatbot () {
+            this.chatbotOpen = !this.chatbotOpen
+            if (this.chatbotOpen && this.chatMessages.length === 0) {
+                // Add welcome message when opening chatbot for the first time
+                this.chatMessages.push({
+                    type: 'bot',
+                    text: 'Hello! I can help you analyze your UAV flight data. ' +
+                          'Upload a .bin flight log file above, then ask me questions like: ' +
+                          '"What was the maximum altitude?", "Were there any GPS issues?", ' +
+                          'or "How long was the flight?" I can also answer general UAV questions.',
+                    time: this.getCurrentTime()
+                })
+            }
+            // Focus on input when chatbot opens
+            if (this.chatbotOpen) {
+                this.$nextTick(() => {
+                    if (this.$refs.chatInput) {
+                        this.$refs.chatInput.focus()
+                    }
+                })
+            }
+        },
+        sendMessage () {
+            if (this.currentMessage.trim() === '') {
+                return
+            }
+
+            // Add user message
+            this.chatMessages.push({
+                type: 'user',
+                text: this.currentMessage,
+                time: this.getCurrentTime()
+            })
+
+            const userMessage = this.currentMessage
+            this.currentMessage = ''
+
+            // Scroll to bottom
+            this.$nextTick(() => {
+                this.scrollToBottom()
+            })
+
+            // Call backend API
+            this.callChatbotAPI(userMessage)
+        },
+        async callChatbotAPI (message) {
+            try {
+                if (!this.sessionId) {
+                    this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                }
+
+                const response = await fetch('http://localhost:8001/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: message,
+                        sessionId: this.sessionId,
+                        timestamp: new Date().toISOString()
+                    })
+                })
+
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    console.error('Chat API failed:', response.status, errorText)
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+
+                const data = await response.json()
+
+                this.chatMessages.push({
+                    type: 'bot',
+                    text: data.content || 'Sorry, I could not process your request.',
+                    time: this.getCurrentTime()
+                })
+
+                if (data.suggested_questions && data.suggested_questions.length > 0) {
+                    this.chatMessages.push({
+                        type: 'bot',
+                        text: 'You might also want to ask: ' + data.suggested_questions.join(', '),
+                        time: this.getCurrentTime()
+                    })
+                }
+            } catch (error) {
+                console.error('Error calling chatbot API:', error)
+
+                this.chatMessages.push({
+                    type: 'bot',
+                    text: 'Sorry, I cannot connect to the analysis service. ' +
+                          'Please make sure the backend is running on port 8001.',
+                    time: this.getCurrentTime()
+                })
+            }
+
+            this.$nextTick(() => {
+                this.scrollToBottom()
+            })
+        },
+        getCurrentTime () {
+            const now = new Date()
+            return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+        scrollToBottom () {
+            if (this.$refs.chatMessages) {
+                this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight
+            }
+        },
+        handleFileUpload (event) {
+            const file = event.target.files[0]
+
+            if (file) {
+                this.uploadStatus = { type: 'processing', message: 'Uploading file...' }
+                this.uploadFlightLog(file)
+            }
+        },
+        async uploadFlightLog (file) {
+            try {
+                const formData = new FormData()
+                formData.append('file', file)
+
+                const response = await fetch('http://localhost:8001/upload-flight-log', {
+                    method: 'POST',
+                    body: formData
+                })
+
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    console.error('Upload failed:', response.status, errorText)
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
+                }
+
+                const data = await response.json()
+
+                this.uploadStatus = { type: 'success', message: 'File uploaded successfully!' }
+                this.flightDataLoaded = true
+
+                this.chatMessages.push({
+                    type: 'bot',
+                    text: `Flight log "${file.name}" uploaded successfully! ` +
+                          `Flight duration: ${data.flight_info?.duration || 'Unknown'}. ` +
+                          `Vehicle type: ${data.flight_info?.vehicle_type || 'Unknown'}. ` +
+                          'You can now ask questions about this flight data.',
+                    time: this.getCurrentTime()
+                })
+
+                setTimeout(() => {
+                    this.uploadStatus = null
+                }, 3000)
+
+                this.$nextTick(() => {
+                    this.scrollToBottom()
+                })
+            } catch (error) {
+                console.error('Error uploading file:', error)
+                this.uploadStatus = { type: 'error', message: 'Failed to upload file. Please try again.' }
+
+                setTimeout(() => {
+                    this.uploadStatus = null
+                }, 5000)
+            }
+        },
+        handleFlightDataUploaded (event) {
+            this.flightDataLoaded = true
+
+            this.chatMessages.push({
+                type: 'bot',
+                text: `Flight log "${event.filename}" uploaded successfully! ` +
+                      `Flight duration: ${event.flightInfo?.duration || 'Unknown'}. ` +
+                      `Vehicle type: ${event.flightInfo?.vehicle_type || 'Unknown'}. ` +
+                      'You can now ask questions about this flight data in the chatbot.',
+                time: this.getCurrentTime()
+            })
+
+            if (this.chatbotOpen) {
+                this.$nextTick(() => {
+                    this.scrollToBottom()
+                })
+            }
         }
     },
     computed: {
@@ -297,7 +541,8 @@ export default {
                         continue
                     }
                     if (this.messageTypes[key].expressions
-                        .filter(field => field.toLowerCase().indexOf(this.filter.toLowerCase()) !== -1).length > 0) {
+                        .filter(field => field.toLowerCase().indexOf(this.filter.toLowerCase()) !== -1)
+                        .length > 0) {
                         filtered[key] = this.messageTypes[key]
                         // console.log('type' + key, document.getElementById('type' + key))
                         this.expand('type' + key)
@@ -423,10 +668,320 @@ export default {
         float: right;
     }
 
+    /* Chatbot Styles */
+    .chatbot-toggle {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .chatbot-toggle:hover {
+        background-color: rgba(30, 37, 54, 0.205);
+    }
+
+    .chatbot-toggle i.fa-robot {
+        color: #135388;
+        margin-right: 5px;
+    }
+
+    .chatbot-container {
+        background-color: rgba(30, 37, 54, 0.1);
+        border: 1px solid rgba(30, 37, 54, 0.3);
+        border-radius: 8px;
+        margin: 10px;
+        padding: 0;
+        max-height: 400px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .file-upload-area {
+        padding: 12px;
+        background: linear-gradient(135deg, rgba(19, 83, 136, 0.08), rgba(30, 37, 54, 0.08));
+        border-radius: 8px 8px 0 0;
+        border-bottom: 1px solid rgba(30, 37, 54, 0.15);
+        gap: 10px;
+    }
+
+    .upload-button {
+        background: linear-gradient(135deg, #135388, #0f4369);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        padding: 12px 24px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        outline: none;
+        box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
+    }
+
+    .upload-button:hover {
+        background: linear-gradient(135deg, #0f4369, #0a2f4d);
+        box-shadow: 0 4px 12px rgba(19, 83, 136, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .upload-button:active {
+        transform: translateY(0) scale(0.95);
+        box-shadow: 0 2px 6px rgba(19, 83, 136, 0.3);
+    }
+
+    .upload-button i {
+        font-size: 16px;
+        margin-right: 8px;
+        z-index: 1;
+        position: relative;
+    }
+
+    .chat-messages {
+        height: 300px;
+        overflow-y: auto;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px 8px 0 0;
+    }
+
+    .chat-message {
+        display: flex;
+        align-items: flex-end;
+        margin-bottom: 8px;
+    }
+
+    .chat-message.user {
+        justify-content: flex-end;
+    }
+
+    .chat-message.bot {
+        justify-content: flex-start;
+    }
+
+    .message-bubble {
+        max-width: 80%;
+        padding: 8px 12px;
+        border-radius: 12px;
+        position: relative;
+        word-wrap: break-word;
+    }
+
+    .chat-message.user .message-bubble {
+        background-color: #135388;
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .chat-message.bot .message-bubble {
+        background-color: rgba(255, 255, 255, 0.897);
+        color: rgb(51, 51, 51);
+        border: 1px solid rgba(30, 37, 54, 0.2);
+        border-bottom-left-radius: 4px;
+    }
+
+    .message-text {
+        display: block;
+        font-size: 90%;
+        line-height: 1.4;
+    }
+
+    .message-time {
+        display: block;
+        font-size: 75%;
+        opacity: 0.7;
+        margin-top: 4px;
+        text-align: right;
+    }
+
+    .chat-message.bot .message-time {
+        text-align: left;
+    }
+
+    .chat-input-container {
+        display: flex;
+        align-items: center;
+        padding: 12px 15px;
+        background: linear-gradient(135deg, rgba(19, 83, 136, 0.08), rgba(30, 37, 54, 0.08));
+        border-radius: 0 0 8px 8px;
+        border-top: 1px solid rgba(30, 37, 54, 0.15);
+        gap: 10px;
+        backdrop-filter: blur(10px);
+    }
+
+    .chat-input {
+        flex: 1;
+        border: 1px solid rgba(30, 37, 54, 0.25);
+        border-radius: 25px;
+        padding: 12px 18px;
+        background: rgba(255, 255, 255, 0.95);
+        color: rgb(51, 51, 51);
+        font-size: 14px;
+        font-weight: 400;
+        outline: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        line-height: 1.4;
+    }
+
+    .chat-input:focus {
+        border-color: #135388;
+        box-shadow: 0 0 0 3px rgba(19, 83, 136, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 1);
+        transform: translateY(-1px);
+        animation: inputPulse 0.3s ease-out;
+    }
+
+    @keyframes inputPulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(19, 83, 136, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(19, 83, 136, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 3px rgba(19, 83, 136, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+    }
+
+    .chat-input::placeholder {
+        color: rgb(120, 120, 120);
+        opacity: 0.8;
+        font-style: italic;
+    }
+
+    .send-button {
+        background: linear-gradient(135deg, #135388, #0f4369);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 42px;
+        height: 42px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        outline: none;
+        box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .send-button:not(:disabled):hover {
+        background: linear-gradient(135deg, #0f4369, #0a2f4d);
+        box-shadow: 0 4px 12px rgba(19, 83, 136, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .send-button:not(:disabled):active {
+        transform: translateY(0) scale(0.95);
+        box-shadow: 0 2px 6px rgba(19, 83, 136, 0.3);
+    }
+
+    .send-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .send-button:hover::before {
+        left: 100%;
+    }
+
+    .send-button i {
+        font-size: 16px;
+        margin-left: 2px;
+        z-index: 1;
+        position: relative;
+    }
+
+    .send-button:disabled {
+        background: linear-gradient(135deg, #ccc, #999);
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .send-button:disabled:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* Scrollbar styling for chat messages */
+    .chat-messages::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(30, 37, 54, 0.3);
+        border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+        background: rgba(30, 37, 54, 0.5);
+    }
+
     @media (min-width: 575px) and (max-width: 992px) {
        a {
         padding: 2px 60px 2px 55px !important;
        }
+    }
+
+    @media (max-width: 400px) {
+        .chat-input-container {
+            padding: 10px 12px;
+            gap: 8px;
+        }
+
+        .chat-input {
+            padding: 10px 15px;
+            font-size: 13px;
+        }
+
+        .send-button {
+            width: 38px;
+            height: 38px;
+        }
+
+        .send-button i {
+            font-size: 14px;
+        }
+    }
+
+    .upload-status {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 85%;
+        font-weight: 400;
+        text-align: center;
+    }
+
+    .upload-status.success {
+        background-color: rgba(0, 128, 0, 0.1);
+        color: green;
+    }
+
+    .upload-status.error {
+        background-color: rgba(255, 0, 0, 0.1);
+        color: red;
+    }
+
+    .upload-status.processing {
+        background-color: rgba(255, 255, 0, 0.1);
+        color: yellow;
     }
 
 </style>
