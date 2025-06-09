@@ -86,12 +86,23 @@
                         class="chat-message"
                         :class="message.type"
                     >
-                        <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
+                        <div class="message-bubble"
+                             :class="{ 'loading-message': message.isLoading, 'typing-message': message.isTyping }">
                             <div v-if="message.isLoading" class="loading-spinner">
                                 <div class="spinner"></div>
                             </div>
-                            <span class="message-text">{{ message.text }}</span>
-                            <span class="message-time">{{ message.time }}</span>
+                            <div v-if="message.isTyping" class="typing-indicator">
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                            </div>
+                            <span v-if="!message.isLoading && !message.isTyping"
+                                  class="message-text"
+                                  :class="{ 'typewriter': message.showTypewriter }">
+                                {{ message.displayText || message.text }}
+                            </span>
+                            <span v-if="!message.isLoading && !message.isTyping"
+                                  class="message-time">{{ message.time }}</span>
                         </div>
                     </div>
                 </div>
@@ -177,7 +188,11 @@ export default {
             uploadingFile: false,
             uploadingFilename: '',
             showPopupChatbot: false,
-            popupChatMessages: []
+            popupChatMessages: [],
+
+            // Typing animation state
+            typingTimeouts: [],
+            isProcessingResponse: false
         }
     },
     created () {
@@ -191,6 +206,9 @@ export default {
         this.loadLocalPresets()
     },
     beforeDestroy () {
+        // Clear typing timeouts
+        this.clearTypingTimeouts()
+
         this.$eventHub.$off('messageTypes')
         this.$eventHub.$off('presetsChanged')
         this.$eventHub.$off('flightDataUploadStarted')
@@ -424,6 +442,9 @@ export default {
                     this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
                 }
 
+                // Add typing indicator
+                this.addTypingIndicator(false)
+
                 const response = await fetch('http://localhost:8001/chat', {
                     method: 'POST',
                     headers: {
@@ -444,28 +465,51 @@ export default {
 
                 const data = await response.json()
 
-                this.chatMessages.push({
+                // Remove typing indicator
+                this.removeTypingIndicator(false)
+
+                // Add bot response with typing animation
+                const botMessage = {
                     type: 'bot',
                     text: data.content || 'Sorry, I could not process your request.',
-                    time: this.getCurrentTime()
-                })
+                    time: this.getCurrentTime(),
+                    displayText: '',
+                    showTypewriter: false
+                }
+                this.chatMessages.push(botMessage)
+
+                // Start typing animation immediately
+                this.startTypingAnimation(botMessage, botMessage.text)
 
                 if (data.suggested_questions && data.suggested_questions.length > 0) {
-                    this.chatMessages.push({
-                        type: 'bot',
-                        text: 'You might also want to ask: ' + data.suggested_questions.join(', '),
-                        time: this.getCurrentTime()
-                    })
+                    // Add suggested questions after typing is complete
+                    setTimeout(() => {
+                        const suggestionMessage = {
+                            type: 'bot',
+                            text: 'You might also want to ask: ' + data.suggested_questions.join(', '),
+                            time: this.getCurrentTime(),
+                            displayText: '',
+                            showTypewriter: false
+                        }
+                        this.chatMessages.push(suggestionMessage)
+                        this.startTypingAnimation(suggestionMessage, suggestionMessage.text)
+                    }, 2000)
                 }
             } catch (error) {
                 console.error('Error calling chatbot API:', error)
 
-                this.chatMessages.push({
+                // Remove typing indicator
+                this.removeTypingIndicator(false)
+
+                const errorMessage = {
                     type: 'bot',
-                    text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
-                          'Please try uploading the file again.',
-                    time: this.getCurrentTime()
-                })
+                    text: 'Sorry, there was an error processing your request. Please try again.',
+                    time: this.getCurrentTime(),
+                    displayText: '',
+                    showTypewriter: false
+                }
+                this.chatMessages.push(errorMessage)
+                this.startTypingAnimation(errorMessage, errorMessage.text)
             }
 
             this.$nextTick(() => {
@@ -510,10 +554,12 @@ export default {
 
             this.chatMessages.push({
                 type: 'bot',
-                text: `✅ Flight log "${event.filename}" uploaded successfully! ` +
-                      `Flight duration: ${event.flightInfo?.duration || 'Unknown'}. ` +
-                      `Vehicle type: ${event.flightInfo?.vehicle_type || 'Unknown'}. ` +
-                      'You can now ask questions about this flight data in the chatbot.',
+                text: `🎉 Great! I've successfully analyzed your flight log "${event.filename}". ` +
+                      `This ${event.flightInfo?.duration || 'flight'} mission ` +
+                      `${event.flightInfo?.vehicle_type ? `with a ${event.flightInfo.vehicle_type}` : ''} ` +
+                      'is now ready for analysis! ' +
+                      'Feel free to ask me anything about this flight - altitude patterns, GPS performance, ' +
+                      'battery usage, or any anomalies you\'d like me to investigate.',
                 time: this.getCurrentTime()
             })
 
@@ -580,9 +626,8 @@ export default {
         },
         async sendMessageToBackend (message, sessionId) {
             try {
-                // Add loading message to popup
-                const loadingIndex = this.popupChatMessages.length
-                this.addMessageToPopup('Analyzing your question...', 'assistant', true)
+                // Add typing indicator to popup
+                this.addTypingIndicator(true)
 
                 const payload = {
                     content: message,
@@ -604,27 +649,129 @@ export default {
 
                 const data = await response.json()
 
-                // Remove loading message and add response
-                this.popupChatMessages.splice(loadingIndex, 1)
-                this.addMessageToPopup(data.content || 'Sorry, I could not process your request.', 'assistant')
+                // Remove typing indicator
+                this.removeTypingIndicator(true)
+
+                // Add bot response with typing animation
+                const botMessage = {
+                    text: data.content || 'Sorry, I could not process your request.',
+                    type: 'assistant',
+                    time: new Date().toLocaleTimeString(),
+                    displayText: '',
+                    showTypewriter: false
+                }
+                this.popupChatMessages.push(botMessage)
+
+                // Start typing animation using ChatbotPopup's method
+                this.$children.find(child => child.$options.name === 'ChatbotPopup')
+                    ?.startTypingAnimation(botMessage, botMessage.text)
 
                 if (data.suggested_questions && data.suggested_questions.length > 0) {
-                    this.addMessageToPopup(
-                        'You might also want to ask: ' + data.suggested_questions.join(', '),
-                        'assistant'
-                    )
+                    setTimeout(() => {
+                        const suggestionMessage = {
+                            text: 'You might also want to ask: ' +
+                                  data.suggested_questions.join(', '),
+                            type: 'assistant',
+                            time: new Date().toLocaleTimeString(),
+                            displayText: '',
+                            showTypewriter: false
+                        }
+                        this.popupChatMessages.push(suggestionMessage)
+                        this.$children.find(child => child.$options.name === 'ChatbotPopup')
+                            ?.startTypingAnimation(suggestionMessage, suggestionMessage.text)
+                    }, 2000)
                 }
             } catch (error) {
                 console.error('Error sending message to backend:', error)
-                // Remove loading message and add error
-                if (this.popupChatMessages[this.popupChatMessages.length - 1].isLoading) {
-                    this.popupChatMessages.pop()
+
+                // Remove typing indicator
+                this.removeTypingIndicator(true)
+
+                const errorMessage = {
+                    text: 'Sorry, there was an error processing your request. Please try again.',
+                    type: 'assistant',
+                    time: new Date().toLocaleTimeString(),
+                    displayText: '',
+                    showTypewriter: false
                 }
-                this.addMessageToPopup(
-                    'Sorry, there was an error processing your request. Please try again.',
-                    'assistant'
-                )
+                this.popupChatMessages.push(errorMessage)
+                this.$children.find(child => child.$options.name === 'ChatbotPopup')
+                    ?.startTypingAnimation(errorMessage, errorMessage.text)
             }
+        },
+        addTypingIndicator (isPopup = false) {
+            const messageArray = isPopup ? this.popupChatMessages : this.chatMessages
+
+            // Add typing indicator message
+            const typingMessage = {
+                type: 'bot',
+                text: '',
+                time: '',
+                isTyping: true,
+                id: 'typing-' + Date.now()
+            }
+
+            messageArray.push(typingMessage)
+
+            // Auto-scroll to bottom
+            this.$nextTick(() => {
+                this.scrollToBottom()
+            })
+        },
+        removeTypingIndicator (isPopup = false) {
+            const messageArray = isPopup ? this.popupChatMessages : this.chatMessages
+            const typingIndex = messageArray.findIndex(msg => msg.isTyping)
+            if (typingIndex !== -1) {
+                messageArray.splice(typingIndex, 1)
+            }
+        },
+        startTypingAnimation (message, finalText) {
+            // Clear any existing timeouts
+            this.typingTimeouts.forEach(timeout => clearTimeout(timeout))
+            this.typingTimeouts = []
+
+            // Set initial state
+            message.displayText = ''
+            message.showTypewriter = true
+            message.isTyping = false
+
+            const words = finalText.split(' ')
+            let currentWordIndex = 0
+
+            const typeNextWord = () => {
+                if (currentWordIndex < words.length) {
+                    if (currentWordIndex === 0) {
+                        message.displayText = words[currentWordIndex]
+                    } else {
+                        message.displayText += ' ' + words[currentWordIndex]
+                    }
+
+                    currentWordIndex++
+
+                    // Scroll to bottom as text appears
+                    this.$nextTick(() => {
+                        this.scrollToBottom()
+                    })
+
+                    // Random delay between 50-150ms per word for natural typing
+                    const delay = Math.random() * 100 + 50
+                    const timeout = setTimeout(typeNextWord, delay)
+                    this.typingTimeouts.push(timeout)
+                } else {
+                    // Typing complete
+                    message.displayText = finalText
+                    message.showTypewriter = false
+                    this.isProcessingResponse = false
+                }
+            }
+
+            // Start typing after a brief delay
+            const initialTimeout = setTimeout(typeNextWord, 300)
+            this.typingTimeouts.push(initialTimeout)
+        },
+        clearTypingTimeouts () {
+            this.typingTimeouts.forEach(timeout => clearTimeout(timeout))
+            this.typingTimeouts = []
         }
     },
     computed: {
@@ -846,7 +993,6 @@ export default {
         align-items: center;
         justify-content: center;
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        margin-left: 10px;
         flex-shrink: 0;
         backdrop-filter: blur(8px);
         box-shadow:
@@ -893,6 +1039,7 @@ export default {
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
         transition: transform 0.2s ease;
         opacity: 0.95;
+        margin-right: -1px;
     }
 
     .popup-button:hover i {
@@ -935,7 +1082,7 @@ export default {
     }
 
     .chatbot-placeholder {
-        display: flex;
+        display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -1125,7 +1272,6 @@ export default {
 
     .send-button i {
         font-size: 15px;
-        margin-left: 1px;
         z-index: 1;
         position: relative;
     }
@@ -1237,6 +1383,65 @@ export default {
     @keyframes shimmer {
         0% { transform: translateX(-100%); }
         100% { transform: translateX(100%); }
+    }
+
+    /* Typing indicator styles */
+    .typing-message {
+        opacity: 0.9;
+    }
+
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 8px 12px;
+        min-height: 20px;
+    }
+
+    .typing-dot {
+        width: 4px;
+        height: 4px;
+        background: rgba(30, 37, 54, 0.6);
+        border-radius: 50%;
+        margin: 0 1px;
+        animation: typingBounce 1.4s infinite;
+    }
+
+    .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes typingBounce {
+        0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.4;
+        }
+        30% {
+            transform: translateY(-3px);
+            opacity: 1;
+        }
+    }
+
+    /* Typewriter effect */
+    .typewriter {
+        position: relative;
+    }
+
+    .typewriter::after {
+        content: '|';
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 300;
+        margin-left: 2px;
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
     }
 
 </style>

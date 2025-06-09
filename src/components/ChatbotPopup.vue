@@ -41,12 +41,20 @@
     >
       <div class="chat-messages" ref="chatMessages">
         <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
-          <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
+          <div class="message-bubble"
+               :class="{ 'loading-message': message.isLoading, 'typing-message': message.isTyping }">
             <div v-if="message.isLoading" class="loading-spinner">
               <div class="spinner"></div>
             </div>
-            <span class="message-text">{{ message.text }}</span>
-            <span class="message-time">{{ message.time }}</span>
+            <div v-if="message.isTyping" class="typing-indicator">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+            <span v-if="!message.isLoading && !message.isTyping"
+                  class="message-text"
+                  :class="{ 'typewriter': message.showTypewriter }">{{ message.displayText || message.text }}</span>
+            <span v-if="!message.isLoading && !message.isTyping" class="message-time">{{ message.time }}</span>
           </div>
         </div>
       </div>
@@ -157,7 +165,11 @@ export default {
 
             // Chat state
             currentMessage: '',
-            sessionId: null
+            sessionId: null,
+
+            // Typing animation state
+            typingTimeouts: [],
+            isProcessingResponse: false
         }
     },
     computed: {
@@ -196,6 +208,9 @@ export default {
         }
     },
     beforeDestroy () {
+        // Clear typing timeouts
+        this.clearTypingTimeouts()
+
         // Remove event listeners
         document.removeEventListener('mousemove', this.handleMouseMove)
         document.removeEventListener('mouseup', this.handleMouseUp)
@@ -352,6 +367,78 @@ export default {
                     this.$refs.chatInput.focus()
                 }
             })
+        },
+
+        addTypingIndicator () {
+            // Add typing indicator message
+            const typingMessage = {
+                type: 'assistant',
+                text: '',
+                time: '',
+                isTyping: true,
+                id: 'typing-' + Date.now()
+            }
+
+            this.$emit('add-typing-message', typingMessage)
+
+            // Auto-scroll to bottom
+            this.$nextTick(() => {
+                this.scrollToBottom()
+            })
+        },
+
+        removeTypingIndicator () {
+            this.$emit('remove-typing-message')
+        },
+
+        startTypingAnimation (message, finalText) {
+            // Clear any existing timeouts
+            this.typingTimeouts.forEach(timeout => clearTimeout(timeout))
+            this.typingTimeouts = []
+
+            // Set initial state
+            message.displayText = ''
+            message.showTypewriter = true
+            message.isTyping = false
+
+            const words = finalText.split(' ')
+            let currentWordIndex = 0
+
+            const typeNextWord = () => {
+                if (currentWordIndex < words.length) {
+                    if (currentWordIndex === 0) {
+                        message.displayText = words[currentWordIndex]
+                    } else {
+                        message.displayText += ' ' + words[currentWordIndex]
+                    }
+
+                    currentWordIndex++
+
+                    // Scroll to bottom as text appears
+                    this.$nextTick(() => {
+                        this.scrollToBottom()
+                    })
+
+                    // Random delay between 50-150ms per word for natural typing
+                    const delay = Math.random() * 100 + 50
+                    const timeout = setTimeout(typeNextWord, delay)
+                    this.typingTimeouts.push(timeout)
+                } else {
+                    // Typing complete
+                    message.displayText = finalText
+                    message.showTypewriter = false
+                    this.isProcessingResponse = false
+                }
+            }
+
+            // Start typing after a brief delay
+            const initialTimeout = setTimeout(typeNextWord, 300)
+            this.typingTimeouts.push(initialTimeout)
+        },
+
+        clearTypingTimeouts () {
+            this.typingTimeouts.forEach(timeout => clearTimeout(timeout))
+            this.typingTimeouts = []
         }
     },
     watch: {
@@ -373,14 +460,15 @@ export default {
 <style scoped>
 .chatbot-popup {
   position: fixed;
-  background: white;
+  background: linear-gradient(135deg, rgba(30, 37, 54, 0.95), rgba(19, 83, 136, 0.95));
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   z-index: 1000000 !important;
+  backdrop-filter: blur(10px);
 }
 
 .popup-header {
@@ -443,7 +531,7 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: white;
+  background: transparent;
 }
 
 .chat-messages {
@@ -453,7 +541,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: #fafbfc;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
   min-height: 0;
 }
 
@@ -505,9 +593,9 @@ export default {
 }
 
 .chat-message.assistant .message-bubble {
-  background: rgba(255, 255, 255, 0.95);
-  color: #2c3e50;
-  border: 1px solid rgba(30, 37, 54, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-bottom-left-radius: 6px;
 }
 
@@ -529,8 +617,8 @@ export default {
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #e1e8ed;
-  border-top: 2px solid #135388;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid rgba(255, 255, 255, 0.8);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -566,18 +654,19 @@ export default {
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  background: white;
-  border-top: 1px solid #e1e8ed;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   gap: 12px;
+  backdrop-filter: blur(10px);
 }
 
 .chat-input {
   flex: 1;
-  border: 1px solid #e1e8ed;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 24px;
   padding: 12px 20px;
-  background: #f8f9fa;
-  color: #2c3e50;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
   font-size: 14px;
   font-weight: 400;
   outline: none;
@@ -586,20 +675,20 @@ export default {
 }
 
 .chat-input:focus {
-  border-color: #135388;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(19, 83, 136, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
   transform: translateY(-1px);
 }
 
 .chat-input:disabled {
-  background-color: #f5f5f5;
-  color: #999;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
   cursor: not-allowed;
 }
 
 .chat-input::placeholder {
-  color: #8e9aaf;
+  color: rgba(255, 255, 255, 0.6);
   opacity: 0.9;
   font-style: italic;
 }
@@ -635,7 +724,6 @@ export default {
 
 .send-button i {
   font-size: 16px;
-  margin-left: 1px;
   z-index: 1;
   position: relative;
 }
@@ -882,16 +970,73 @@ export default {
 }
 
 .chat-messages::-webkit-scrollbar-track {
-  background: #f1f3f4;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: #c1c8d1;
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #a1aab5;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Typing indicator styles */
+.typing-message {
+  opacity: 0.9;
+}
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* Typewriter effect */
+.typewriter {
+  position: relative;
+}
+
+.typewriter::after {
+  content: '|';
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 300;
+  margin-left: 2px;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 </style>
