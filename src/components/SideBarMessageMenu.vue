@@ -67,7 +67,10 @@
         <div v-if="chatbotOpen" class="chatbot-container">
             <div class="chat-messages" ref="chatMessages">
                 <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
-                    <div class="message-bubble">
+                    <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
+                        <div v-if="message.isLoading" class="loading-spinner">
+                            <div class="spinner"></div>
+                        </div>
                         <span class="message-text">{{ message.text }}</span>
                         <span class="message-time">{{ message.time }}</span>
                     </div>
@@ -77,14 +80,15 @@
                 <input
                     v-model="currentMessage"
                     @keyup.enter="sendMessage"
-                    placeholder="Ask about flight data..."
+                    :placeholder="uploadingFile ? 'Analyzing flight data...' : 'Ask about flight data...'"
                     class="chat-input"
                     ref="chatInput"
+                    :disabled="uploadingFile"
                 />
                 <button
                     @click="sendMessage"
                     class="send-button"
-                    :disabled="!currentMessage.trim()"
+                    :disabled="!currentMessage.trim() || uploadingFile"
                 >
                     <i class="fas fa-paper-plane"></i>
                 </button>
@@ -135,13 +139,17 @@ export default {
             chatMessages: [],
             currentMessage: '',
             sessionId: null,
-            flightDataLoaded: false
+            flightDataLoaded: false,
+            uploadingFile: false,
+            uploadingFilename: ''
         }
     },
     created () {
         this.$eventHub.$on('messageTypes', this.handleMessageTypes)
         this.$eventHub.$on('presetsChanged', this.loadLocalPresets)
+        this.$eventHub.$on('flightDataUploadStarted', this.handleFlightDataUploadStarted)
         this.$eventHub.$on('flightDataUploaded', this.handleFlightDataUploaded)
+        this.$eventHub.$on('flightDataUploadError', this.handleFlightDataUploadError)
         this.messagePresets = this.loadXmlPresets()
         this.messageDocs = this.loadXmlDocs()
         this.loadLocalPresets()
@@ -149,7 +157,9 @@ export default {
     beforeDestroy () {
         this.$eventHub.$off('messageTypes')
         this.$eventHub.$off('presetsChanged')
+        this.$eventHub.$off('flightDataUploadStarted')
         this.$eventHub.$off('flightDataUploaded')
+        this.$eventHub.$off('flightDataUploadError')
     },
     methods: {
         loadXmlPresets () {
@@ -416,8 +426,8 @@ export default {
 
                 this.chatMessages.push({
                     type: 'bot',
-                    text: 'Sorry, I cannot connect to the analysis service. ' +
-                          'Please make sure the backend is running on port 8001.',
+                    text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
+                          'Please try uploading the file again.',
                     time: this.getCurrentTime()
                 })
             }
@@ -435,15 +445,53 @@ export default {
                 this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight
             }
         },
+        handleFlightDataUploadStarted (event) {
+            this.uploadingFile = true
+            this.uploadingFilename = event.filename
+
+            // Add loading message to chat
+            this.chatMessages.push({
+                type: 'bot',
+                text: `📡 Analyzing flight log "${event.filename}"... ` +
+                      'This may take a moment while I parse the flight data and detect any anomalies.',
+                time: this.getCurrentTime(),
+                isLoading: true
+            })
+
+            if (this.chatbotOpen) {
+                this.$nextTick(() => {
+                    this.scrollToBottom()
+                })
+            }
+        },
         handleFlightDataUploaded (event) {
+            this.uploadingFile = false
+            this.uploadingFilename = ''
             this.flightDataLoaded = true
 
             this.chatMessages.push({
                 type: 'bot',
-                text: `Flight log "${event.filename}" uploaded successfully! ` +
+                text: `✅ Flight log "${event.filename}" uploaded successfully! ` +
                       `Flight duration: ${event.flightInfo?.duration || 'Unknown'}. ` +
                       `Vehicle type: ${event.flightInfo?.vehicle_type || 'Unknown'}. ` +
                       'You can now ask questions about this flight data in the chatbot.',
+                time: this.getCurrentTime()
+            })
+
+            if (this.chatbotOpen) {
+                this.$nextTick(() => {
+                    this.scrollToBottom()
+                })
+            }
+        },
+        handleFlightDataUploadError (event) {
+            this.uploadingFile = false
+            this.uploadingFilename = ''
+
+            this.chatMessages.push({
+                type: 'bot',
+                text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
+                      'Please try uploading the file again.',
                 time: this.getCurrentTime()
             })
 
@@ -845,6 +893,57 @@ export default {
         .send-button i {
             font-size: 14px;
         }
+    }
+
+    /* Loading States */
+    .loading-message {
+        background: linear-gradient(135deg, rgba(19, 83, 136, 0.1), rgba(30, 37, 54, 0.05)) !important;
+        border: 1px solid rgba(19, 83, 136, 0.3) !important;
+        position: relative;
+        overflow: visible;
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(19, 83, 136, 0.3);
+        border-left: 2px solid #135388;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-message .message-text {
+        color: #135388;
+        font-weight: 500;
+    }
+
+    .loading-message::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, transparent, rgba(19, 83, 136, 0.1), transparent);
+        animation: shimmer 2s infinite;
+        pointer-events: none;
+    }
+
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
     }
 
 </style>

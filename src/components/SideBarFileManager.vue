@@ -183,6 +183,11 @@ export default {
             }
 
             try {
+                // Emit loading start event
+                this.$eventHub.$emit('flightDataUploadStarted', {
+                    filename: file.name
+                })
+
                 const formData = new FormData()
                 formData.append('file', file)
 
@@ -193,6 +198,11 @@ export default {
 
                 if (!response.ok) {
                     console.error('Backend upload failed:', response.status)
+                    // Emit error event
+                    this.$eventHub.$emit('flightDataUploadError', {
+                        filename: file.name,
+                        error: `Upload failed with status: ${response.status}`
+                    })
                     return
                 }
 
@@ -204,10 +214,20 @@ export default {
                 })
             } catch (error) {
                 console.error('Error uploading to backend:', error)
+                // Emit error event
+                this.$eventHub.$emit('flightDataUploadError', {
+                    filename: file.name,
+                    error: error.message
+                })
             }
         },
         async uploadSampleToBackend (arrayBuffer, filename) {
             try {
+                // Emit loading start event
+                this.$eventHub.$emit('flightDataUploadStarted', {
+                    filename: filename
+                })
+
                 const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' })
                 const file = new File([blob], filename, { type: 'application/octet-stream' })
 
@@ -221,6 +241,11 @@ export default {
 
                 if (!response.ok) {
                     console.error('Backend sample upload failed:', response.status)
+                    // Emit error event
+                    this.$eventHub.$emit('flightDataUploadError', {
+                        filename: filename,
+                        error: `Sample upload failed with status: ${response.status}`
+                    })
                     return
                 }
 
@@ -232,6 +257,11 @@ export default {
                 })
             } catch (error) {
                 console.error('Error uploading sample to backend:', error)
+                // Emit error event
+                this.$eventHub.$emit('flightDataUploadError', {
+                    filename: filename,
+                    error: error.message
+                })
             }
         },
         uploadFile () {
