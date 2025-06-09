@@ -53,7 +53,10 @@
             </div>
             <span v-if="!message.isLoading && !message.isTyping"
                   class="message-text"
-                  :class="{ 'typewriter': message.showTypewriter }">{{ message.displayText || message.text }}</span>
+                  :class="{ 'typewriter': message.showTypewriter }">{{
+                      message.showTypewriter ? message.displayText :
+                      (message.displayText !== undefined ? message.displayText : message.text)
+                  }}</span>
             <span v-if="!message.isLoading && !message.isTyping" class="message-time">{{ message.time }}</span>
           </div>
         </div>

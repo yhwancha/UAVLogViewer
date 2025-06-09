@@ -99,7 +99,10 @@
                             <span v-if="!message.isLoading && !message.isTyping"
                                   class="message-text"
                                   :class="{ 'typewriter': message.showTypewriter }">
-                                {{ message.displayText || message.text }}
+                                {{
+                                    message.showTypewriter ? message.displayText :
+                                    (message.displayText !== undefined ? message.displayText : message.text)
+                                }}
                             </span>
                             <span v-if="!message.isLoading && !message.isTyping"
                                   class="message-time">{{ message.time }}</span>
@@ -474,25 +477,29 @@ export default {
                     text: data.content || 'Sorry, I could not process your request.',
                     time: this.getCurrentTime(),
                     displayText: '',
-                    showTypewriter: false
+                    showTypewriter: false,
+                    _originalText: data.content || 'Sorry, I could not process your request.'
                 }
                 this.chatMessages.push(botMessage)
 
                 // Start typing animation immediately
-                this.startTypingAnimation(botMessage, botMessage.text)
+                this.startTypingAnimation(botMessage, botMessage._originalText)
 
                 if (data.suggested_questions && data.suggested_questions.length > 0) {
                     // Add suggested questions after typing is complete
                     setTimeout(() => {
                         const suggestionMessage = {
                             type: 'bot',
-                            text: 'You might also want to ask: ' + data.suggested_questions.join(', '),
+                            text: 'You might also want to ask: ' +
+                                  data.suggested_questions.join(', '),
                             time: this.getCurrentTime(),
                             displayText: '',
-                            showTypewriter: false
+                            showTypewriter: false,
+                            _originalText: 'You might also want to ask: ' +
+                                          data.suggested_questions.join(', ')
                         }
                         this.chatMessages.push(suggestionMessage)
-                        this.startTypingAnimation(suggestionMessage, suggestionMessage.text)
+                        this.startTypingAnimation(suggestionMessage, suggestionMessage._originalText)
                     }, 2000)
                 }
             } catch (error) {
@@ -506,10 +513,11 @@ export default {
                     text: 'Sorry, there was an error processing your request. Please try again.',
                     time: this.getCurrentTime(),
                     displayText: '',
-                    showTypewriter: false
+                    showTypewriter: false,
+                    _originalText: 'Sorry, there was an error processing your request. Please try again.'
                 }
                 this.chatMessages.push(errorMessage)
-                this.startTypingAnimation(errorMessage, errorMessage.text)
+                this.startTypingAnimation(errorMessage, errorMessage._originalText)
             }
 
             this.$nextTick(() => {
@@ -529,7 +537,7 @@ export default {
             this.uploadingFile = true
             this.uploadingFilename = event.filename
 
-            // Add loading message to chat
+            // Add loading message to sidebar chat
             this.chatMessages.push({
                 type: 'bot',
                 text: `📡 Analyzing flight log "${event.filename}"... ` +
@@ -537,6 +545,17 @@ export default {
                 time: this.getCurrentTime(),
                 isLoading: true
             })
+
+            // Also add loading message to popup chat if it has messages
+            if (this.popupChatMessages.length > 0) {
+                this.popupChatMessages.push({
+                    type: 'assistant',
+                    text: `📡 Analyzing flight log "${event.filename}"... ` +
+                          'This may take a moment while I parse the flight data and detect any anomalies.',
+                    time: this.getCurrentTime(),
+                    isLoading: true
+                })
+            }
 
             if (this.chatbotOpen) {
                 this.$nextTick(() => {
@@ -549,10 +568,7 @@ export default {
             this.uploadingFilename = ''
             this.flightDataLoaded = true
 
-            // Remove any existing loading messages
-            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
-
-            this.chatMessages.push({
+            const successMessage = {
                 type: 'bot',
                 text: `🎉 Great! I've successfully analyzed your flight log "${event.filename}". ` +
                       `This ${event.flightInfo?.duration || 'flight'} mission ` +
@@ -561,7 +577,29 @@ export default {
                       'Feel free to ask me anything about this flight - altitude patterns, GPS performance, ' +
                       'battery usage, or any anomalies you\'d like me to investigate.',
                 time: this.getCurrentTime()
-            })
+            }
+
+            // Remove any existing loading messages from sidebar chat
+            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
+            this.chatMessages.push(successMessage)
+
+            // Also update popup chat messages
+            if (this.popupChatMessages.length > 0) {
+                // Remove any existing loading messages from popup chat
+                this.popupChatMessages = this.popupChatMessages.filter(msg => !msg.isLoading)
+
+                // Add success message to popup chat with correct type
+                this.popupChatMessages.push({
+                    type: 'assistant',
+                    text: `🎉 Great! I've successfully analyzed your flight log "${event.filename}". ` +
+                          `This ${event.flightInfo?.duration || 'flight'} mission ` +
+                          `${event.flightInfo?.vehicle_type ? `with a ${event.flightInfo.vehicle_type}` : ''} ` +
+                          'is now ready for analysis! ' +
+                          'Feel free to ask me anything about this flight - altitude patterns, GPS performance, ' +
+                          'battery usage, or any anomalies you\'d like me to investigate.',
+                    time: this.getCurrentTime()
+                })
+            }
 
             if (this.chatbotOpen) {
                 this.$nextTick(() => {
@@ -573,15 +611,30 @@ export default {
             this.uploadingFile = false
             this.uploadingFilename = ''
 
-            // Remove any existing loading messages
-            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
-
-            this.chatMessages.push({
+            const errorMessage = {
                 type: 'bot',
                 text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
                       'Please try uploading the file again.',
                 time: this.getCurrentTime()
-            })
+            }
+
+            // Remove any existing loading messages from sidebar chat
+            this.chatMessages = this.chatMessages.filter(msg => !msg.isLoading)
+            this.chatMessages.push(errorMessage)
+
+            // Also update popup chat messages
+            if (this.popupChatMessages.length > 0) {
+                // Remove any existing loading messages from popup chat
+                this.popupChatMessages = this.popupChatMessages.filter(msg => !msg.isLoading)
+
+                // Add error message to popup chat with correct type
+                this.popupChatMessages.push({
+                    type: 'assistant',
+                    text: `❌ Error analyzing flight log "${event.filename}": ${event.error}. ` +
+                          'Please try uploading the file again.',
+                    time: this.getCurrentTime()
+                })
+            }
 
             if (this.chatbotOpen) {
                 this.$nextTick(() => {
@@ -658,13 +711,14 @@ export default {
                     type: 'assistant',
                     time: new Date().toLocaleTimeString(),
                     displayText: '',
-                    showTypewriter: false
+                    showTypewriter: false,
+                    _originalText: data.content || 'Sorry, I could not process your request.'
                 }
                 this.popupChatMessages.push(botMessage)
 
                 // Start typing animation using ChatbotPopup's method
                 this.$children.find(child => child.$options.name === 'ChatbotPopup')
-                    ?.startTypingAnimation(botMessage, botMessage.text)
+                    ?.startTypingAnimation(botMessage, botMessage._originalText)
 
                 if (data.suggested_questions && data.suggested_questions.length > 0) {
                     setTimeout(() => {
@@ -674,11 +728,13 @@ export default {
                             type: 'assistant',
                             time: new Date().toLocaleTimeString(),
                             displayText: '',
-                            showTypewriter: false
+                            showTypewriter: false,
+                            _originalText: 'You might also want to ask: ' +
+                                          data.suggested_questions.join(', ')
                         }
                         this.popupChatMessages.push(suggestionMessage)
                         this.$children.find(child => child.$options.name === 'ChatbotPopup')
-                            ?.startTypingAnimation(suggestionMessage, suggestionMessage.text)
+                            ?.startTypingAnimation(suggestionMessage, suggestionMessage._originalText)
                     }, 2000)
                 }
             } catch (error) {
@@ -1054,11 +1110,11 @@ export default {
     }
 
     .chatbot-container {
-        background: linear-gradient(135deg, rgba(19, 83, 136, 0.03), rgba(30, 37, 54, 0.03));
-        border: 1px solid rgba(30, 37, 54, 0.12);
+        background: linear-gradient(135deg, rgba(30, 37, 54, 0.95), rgba(19, 83, 136, 0.95));
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         margin: 8px 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
         overflow: hidden;
         backdrop-filter: blur(10px);
         display: flex;
@@ -1072,13 +1128,13 @@ export default {
     .chatbot-container.chatbot-visible {
         opacity: 1;
         transform: translateY(0) scale(1);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .chatbot-container.chatbot-hidden {
         opacity: 0.7;
         transform: translateY(-8px) scale(0.98);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     }
 
     .chatbot-placeholder {
@@ -1087,10 +1143,10 @@ export default {
         align-items: center;
         justify-content: center;
         height: 100%;
-        color: rgba(30, 37, 54, 0.4);
+        color: rgba(255, 255, 255, 0.4);
         font-style: italic;
         gap: 12px;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2));
+        background: transparent;
         border-radius: 12px;
         margin: 1px;
     }
@@ -1098,7 +1154,7 @@ export default {
     .chatbot-placeholder i {
         font-size: 36px;
         opacity: 0.25;
-        color: rgba(102, 126, 234, 0.3);
+        color: rgba(255, 255, 255, 0.3);
         animation: float 3s ease-in-out infinite;
     }
 
@@ -1112,6 +1168,7 @@ export default {
         opacity: 0.6;
         font-weight: 500;
         letter-spacing: 0.3px;
+        color: rgba(255, 255, 255, 0.6);
     }
 
     .chat-messages {
@@ -1156,8 +1213,8 @@ export default {
 
     .message-bubble {
         max-width: 82%;
-        padding: 10px 14px;
-        border-radius: 16px;
+        padding: 12px 16px;
+        border-radius: 18px;
         position: relative;
         word-wrap: break-word;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -1176,24 +1233,26 @@ export default {
     }
 
     .chat-message.bot .message-bubble {
-        background: rgba(255, 255, 255, 0.95);
-        color: #2c3e50;
-        border: 1px solid rgba(30, 37, 54, 0.15);
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         border-bottom-left-radius: 6px;
     }
 
     .message-text {
         display: block;
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.5;
         font-weight: 400;
+        margin-bottom: 6px;
+        white-space: pre-wrap;
     }
 
     .message-time {
         display: block;
         font-size: 11px;
-        opacity: 0.65;
-        margin-top: 5px;
+        opacity: 0.6;
+        margin-top: 4px;
         text-align: right;
         font-weight: 500;
     }
@@ -1205,44 +1264,71 @@ export default {
     .chat-input-container {
         display: flex;
         align-items: center;
-        padding: 14px 18px;
-        background: linear-gradient(135deg, rgba(19, 83, 136, 0.06), rgba(30, 37, 54, 0.06));
+        padding: 16px 16px 16px 16px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.08));
         border-radius: 0 0 12px 12px;
-        border-top: 1px solid rgba(30, 37, 54, 0.12);
-        gap: 12px;
-        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        gap: 10px;
+        backdrop-filter: blur(15px);
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .chat-input {
         flex: 1;
-        border: 1px solid rgba(30, 37, 54, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.25);
         border-radius: 24px;
         padding: 12px 18px;
-        background: rgba(255, 255, 255, 0.98);
-        color: #2c3e50;
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.95);
         font-size: 13px;
         font-weight: 400;
         outline: none;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         line-height: 1.4;
+        box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        min-width: 0;
     }
 
     .chat-input:focus {
-        border-color: #135388;
-        box-shadow: 0 0 0 3px rgba(19, 83, 136, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-        background: rgba(255, 255, 255, 1);
+        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.18);
+        box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.15),
+            0 4px 16px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
         transform: translateY(-1px);
+        color: rgba(255, 255, 255, 1);
+    }
+
+    .chat-input:hover:not(:disabled) {
+        border-color: rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.15);
+        box-shadow:
+            0 3px 12px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .chat-input:disabled {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.4);
+        cursor: not-allowed;
+        border-color: rgba(255, 255, 255, 0.1);
+        transform: none;
+        box-shadow: none;
     }
 
     .chat-input::placeholder {
-        color: #8e9aaf;
-        opacity: 0.8;
+        color: rgba(255, 255, 255, 0.65);
+        opacity: 1;
         font-style: italic;
+        font-weight: 300;
     }
 
     .send-button {
-        background: linear-gradient(135deg, #135388, #0f4369);
+        background: linear-gradient(135deg, #4a90e2 0%, #357abd 50%, #1e5a8a 100%);
         color: white;
         border: none;
         border-radius: 50%;
@@ -1252,59 +1338,103 @@ export default {
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         outline: none;
-        box-shadow: 0 3px 10px rgba(19, 83, 136, 0.3);
+        box-shadow:
+            0 3px 12px rgba(74, 144, 226, 0.4),
+            0 1px 3px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
         position: relative;
         overflow: hidden;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .send-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        transition: left 0.5s ease;
+    }
+
+    .send-button:not(:disabled):hover::before {
+        left: 100%;
     }
 
     .send-button:not(:disabled):hover {
-        background: linear-gradient(135deg, #0f4369, #0a2f4d);
-        box-shadow: 0 5px 15px rgba(19, 83, 136, 0.4);
+        background: linear-gradient(135deg, #357abd 0%, #2a6ba8 50%, #1e5a8a 100%);
+        box-shadow:
+            0 5px 18px rgba(74, 144, 226, 0.5),
+            0 3px 6px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
         transform: translateY(-2px) scale(1.05);
+        border-color: rgba(255, 255, 255, 0.4);
     }
 
     .send-button:not(:disabled):active {
-        transform: translateY(0) scale(0.95);
-        box-shadow: 0 2px 6px rgba(19, 83, 136, 0.3);
+        transform: translateY(-1px) scale(1.02);
+        box-shadow:
+            0 2px 8px rgba(74, 144, 226, 0.4),
+            0 1px 3px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
 
     .send-button i {
         font-size: 15px;
         z-index: 1;
         position: relative;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+        transition: transform 0.2s ease;
+    }
+
+    .send-button:not(:disabled):hover i {
+        transform: scale(1.1) translateX(1px);
     }
 
     .send-button:disabled {
-        background: linear-gradient(135deg, #bdc3c7, #95a5a6);
+        background: linear-gradient(135deg, #6c757d, #5a6268);
         cursor: not-allowed;
-        box-shadow: none;
+        box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
         transform: none;
+        border-color: rgba(255, 255, 255, 0.1);
+        opacity: 0.6;
     }
 
     .send-button:disabled:hover {
         transform: none;
-        box-shadow: none;
+        box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .send-button:disabled i {
+        filter: none;
+        opacity: 0.7;
     }
 
     /* Scrollbar styling for chat messages */
     .chat-messages::-webkit-scrollbar {
-        width: 6px;
+        width: 8px;
     }
 
     .chat-messages::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.1);
-        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
     }
 
     .chat-messages::-webkit-scrollbar-thumb {
-        background: rgba(30, 37, 54, 0.3);
-        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
     }
 
     .chat-messages::-webkit-scrollbar-thumb:hover {
-        background: rgba(30, 37, 54, 0.5);
+        background: rgba(255, 255, 255, 0.5);
     }
 
     @media (min-width: 575px) and (max-width: 992px) {
@@ -1336,53 +1466,32 @@ export default {
 
     /* Loading States */
     .loading-message {
-        background: linear-gradient(135deg, rgba(19, 83, 136, 0.1), rgba(30, 37, 54, 0.05)) !important;
-        border: 1px solid rgba(19, 83, 136, 0.3) !important;
-        position: relative;
-        overflow: visible;
+        opacity: 0.8;
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 0.8; }
+        50% { opacity: 1; }
     }
 
     .loading-spinner {
         display: inline-block;
         margin-right: 8px;
-        vertical-align: middle;
     }
 
     .spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(19, 83, 136, 0.3);
-        border-left: 2px solid #135388;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid rgba(255, 255, 255, 0.8);
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        display: inline-block;
     }
 
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
-    }
-
-    .loading-message .message-text {
-        color: #135388;
-        font-weight: 500;
-    }
-
-    .loading-message::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(90deg, transparent, rgba(19, 83, 136, 0.1), transparent);
-        animation: shimmer 2s infinite;
-        pointer-events: none;
-    }
-
-    @keyframes shimmer {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(100%); }
     }
 
     /* Typing indicator styles */
@@ -1393,17 +1502,15 @@ export default {
     .typing-indicator {
         display: flex;
         align-items: center;
-        justify-content: flex-start;
-        padding: 8px 12px;
-        min-height: 20px;
+        gap: 4px;
+        padding: 8px 0;
     }
 
     .typing-dot {
-        width: 4px;
-        height: 4px;
-        background: rgba(30, 37, 54, 0.6);
+        width: 6px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.6);
         border-radius: 50%;
-        margin: 0 1px;
         animation: typingBounce 1.4s infinite;
     }
 
@@ -1421,7 +1528,7 @@ export default {
             opacity: 0.4;
         }
         30% {
-            transform: translateY(-3px);
+            transform: translateY(-8px);
             opacity: 1;
         }
     }
