@@ -65,24 +65,6 @@
         </li>
 
         <div v-if="chatbotOpen" class="chatbot-container">
-            <!-- File Upload Area -->
-            <div class="file-upload-area">
-                <input
-                    type="file"
-                    ref="fileInput"
-                    @change="handleFileUpload"
-                    accept=".bin"
-                    style="display: none"
-                />
-                <button @click="$refs.fileInput.click()" class="upload-button">
-                    <i class="fas fa-upload"></i>
-                    Upload Flight Log (.bin)
-                </button>
-                <div v-if="uploadStatus" class="upload-status" :class="uploadStatus.type">
-                    {{ uploadStatus.message }}
-                </div>
-            </div>
-
             <div class="chat-messages" ref="chatMessages">
                 <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
                     <div class="message-bubble">
@@ -153,7 +135,6 @@ export default {
             chatMessages: [],
             currentMessage: '',
             sessionId: null,
-            uploadStatus: null,
             flightDataLoaded: false
         }
     },
@@ -454,60 +435,6 @@ export default {
                 this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight
             }
         },
-        handleFileUpload (event) {
-            const file = event.target.files[0]
-
-            if (file) {
-                this.uploadStatus = { type: 'processing', message: 'Uploading file...' }
-                this.uploadFlightLog(file)
-            }
-        },
-        async uploadFlightLog (file) {
-            try {
-                const formData = new FormData()
-                formData.append('file', file)
-
-                const response = await fetch('http://localhost:8001/upload-flight-log', {
-                    method: 'POST',
-                    body: formData
-                })
-
-                if (!response.ok) {
-                    const errorText = await response.text()
-                    console.error('Upload failed:', response.status, errorText)
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
-                }
-
-                const data = await response.json()
-
-                this.uploadStatus = { type: 'success', message: 'File uploaded successfully!' }
-                this.flightDataLoaded = true
-
-                this.chatMessages.push({
-                    type: 'bot',
-                    text: `Flight log "${file.name}" uploaded successfully! ` +
-                          `Flight duration: ${data.flight_info?.duration || 'Unknown'}. ` +
-                          `Vehicle type: ${data.flight_info?.vehicle_type || 'Unknown'}. ` +
-                          'You can now ask questions about this flight data.',
-                    time: this.getCurrentTime()
-                })
-
-                setTimeout(() => {
-                    this.uploadStatus = null
-                }, 3000)
-
-                this.$nextTick(() => {
-                    this.scrollToBottom()
-                })
-            } catch (error) {
-                console.error('Error uploading file:', error)
-                this.uploadStatus = { type: 'error', message: 'Failed to upload file. Please try again.' }
-
-                setTimeout(() => {
-                    this.uploadStatus = null
-                }, 5000)
-            }
-        },
         handleFlightDataUploaded (event) {
             this.flightDataLoaded = true
 
@@ -684,55 +611,15 @@ export default {
     }
 
     .chatbot-container {
-        background-color: rgba(30, 37, 54, 0.1);
-        border: 1px solid rgba(30, 37, 54, 0.3);
+        background: linear-gradient(135deg, rgba(19, 83, 136, 0.05), rgba(30, 37, 54, 0.05));
+        border: 1px solid rgba(30, 37, 54, 0.15);
         border-radius: 8px;
-        margin: 10px;
-        padding: 0;
-        max-height: 400px;
+        margin: 10px 15px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        backdrop-filter: blur(10px);
         display: flex;
         flex-direction: column;
-    }
-
-    .file-upload-area {
-        padding: 12px;
-        background: linear-gradient(135deg, rgba(19, 83, 136, 0.08), rgba(30, 37, 54, 0.08));
-        border-radius: 8px 8px 0 0;
-        border-bottom: 1px solid rgba(30, 37, 54, 0.15);
-        gap: 10px;
-    }
-
-    .upload-button {
-        background: linear-gradient(135deg, #135388, #0f4369);
-        color: white;
-        border: none;
-        border-radius: 25px;
-        padding: 12px 24px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-        outline: none;
-        box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
-    }
-
-    .upload-button:hover {
-        background: linear-gradient(135deg, #0f4369, #0a2f4d);
-        box-shadow: 0 4px 12px rgba(19, 83, 136, 0.4);
-        transform: translateY(-2px);
-    }
-
-    .upload-button:active {
-        transform: translateY(0) scale(0.95);
-        box-shadow: 0 2px 6px rgba(19, 83, 136, 0.3);
-    }
-
-    .upload-button i {
-        font-size: 16px;
-        margin-right: 8px;
-        z-index: 1;
-        position: relative;
     }
 
     .chat-messages {
@@ -958,30 +845,6 @@ export default {
         .send-button i {
             font-size: 14px;
         }
-    }
-
-    .upload-status {
-        margin-top: 10px;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 85%;
-        font-weight: 400;
-        text-align: center;
-    }
-
-    .upload-status.success {
-        background-color: rgba(0, 128, 0, 0.1);
-        color: green;
-    }
-
-    .upload-status.error {
-        background-color: rgba(255, 0, 0, 0.1);
-        color: red;
-    }
-
-    .upload-status.processing {
-        background-color: rgba(255, 255, 0, 0.1);
-        color: yellow;
     }
 
 </style>
