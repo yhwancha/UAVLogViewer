@@ -5,6 +5,37 @@
  This is a Javascript based log viewer for Mavlink telemetry and dataflash logs.
  [Live demo here](http://plot.ardupilot.org).
 
+## AI-Powered Chatbot Features
+
+### Intelligent Flight Data Analysis
+- **AI Assistant**: OpenAI-powered chatbot for natural language flight log analysis
+- **Smart Queries**: Ask questions about flight data in plain English
+- **Real-time Analysis**: Instant responses with contextual flight insights
+- **Multi-interface Support**: Available in both sidebar and popup modes
+
+### Key Chatbot Features
+- **Flight Data Insights**: Get comprehensive analysis of flight logs, performance metrics, and anomaly detection
+- **Natural Conversations**: Chat interface with typing animations and session memory
+- **Dark Theme**: Modern UI optimized for extended analysis sessions
+- **Responsive Design**: Seamless experience across sidebar and popup interfaces
+- **State Synchronization**: Messages sync between sidebar and popup views
+- **Real-time Processing**: Fast response times with loading indicators
+
+### Usage Examples
+Ask the AI assistant questions like:
+- "What was the maximum altitude during this flight?"
+- "Were there any GPS signal issues?"
+- "Analyze the battery performance throughout the flight"
+- "Show me any unusual vibration patterns"
+- "What was the average ground speed?"
+
+### Technical Implementation
+- **Frontend**: Vue.js components with Bootstrap Vue styling
+- **Backend**: FastAPI with OpenAI integration
+- **Real-time Communication**: RESTful API with session management
+- **Data Processing**: Comprehensive MAVLink log analysis
+- **Error Handling**: Graceful error states with user-friendly messages
+
 ## Build Setup
 
 ``` bash
@@ -25,6 +56,21 @@ npm run e2e
 
 # run all tests
 npm test
+```
+
+## Environment Configuration
+
+For AI chatbot functionality, ensure the backend is running with proper OpenAI API configuration:
+
+``` bash
+# Backend setup (in backend directory)
+pip install -r requirements.txt
+
+# Set OpenAI API key
+export OPENAI_API_KEY=your_api_key_here
+
+# Run backend server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 # Docker
