@@ -655,221 +655,225 @@ export default {
 /* Resize handles */
 .resize-handle {
   position: absolute;
-  background: transparent;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
   transition: all 0.2s ease;
   z-index: 10;
 }
 
 .resize-handle:hover {
-  background: rgba(102, 126, 234, 0.3);
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.5);
+  transform: scale(1.1);
 }
 
 .resize-handle:active {
-  background: rgba(102, 126, 234, 0.5);
+  background: rgba(102, 126, 234, 0.3);
+  border-color: rgba(102, 126, 234, 0.7);
 }
 
 .resize-se {
-  bottom: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
+  bottom: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
   cursor: se-resize;
+  border-radius: 0 0 12px 0;
 }
 
 .resize-se::after {
   content: '';
   position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 12px;
-  height: 12px;
+  bottom: 1px;
+  right: 1px;
+  width: 8px;
+  height: 8px;
   background: linear-gradient(
     -45deg,
-    transparent 40%,
-    rgba(102, 126, 234, 0.6) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(102, 126, 234, 0.8) 50%,
+    transparent 70%
   );
-  background-size: 3px 3px;
-  opacity: 0.7;
+  background-size: 2px 2px;
 }
 
 .resize-s {
-  bottom: 0;
-  left: 16px;
-  right: 16px;
+  bottom: -4px;
+  left: 20px;
+  right: 20px;
   height: 8px;
   cursor: s-resize;
+  border-radius: 0 0 4px 4px;
 }
 
 .resize-s::after {
   content: '';
   position: absolute;
-  bottom: 2px;
+  bottom: 1px;
   left: 50%;
   transform: translateX(-50%);
-  width: 20px;
-  height: 4px;
+  width: 30px;
+  height: 3px;
   background: repeating-linear-gradient(
     90deg,
     transparent,
-    transparent 2px,
-    rgba(102, 126, 234, 0.6) 2px,
-    rgba(102, 126, 234, 0.6) 4px
+    transparent 1px,
+    rgba(102, 126, 234, 0.8) 1px,
+    rgba(102, 126, 234, 0.8) 3px
   );
-  opacity: 0.7;
 }
 
 .resize-e {
-  top: 48px;
-  right: 0;
+  top: 56px;
+  right: -4px;
   width: 8px;
-  bottom: 8px;
+  bottom: 20px;
   cursor: e-resize;
+  border-radius: 0 4px 4px 0;
 }
 
 .resize-e::after {
   content: '';
   position: absolute;
-  right: 2px;
+  right: 1px;
   top: 50%;
   transform: translateY(-50%);
-  width: 4px;
-  height: 20px;
+  width: 3px;
+  height: 30px;
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 2px,
-    rgba(102, 126, 234, 0.6) 2px,
-    rgba(102, 126, 234, 0.6) 4px
+    transparent 1px,
+    rgba(102, 126, 234, 0.8) 1px,
+    rgba(102, 126, 234, 0.8) 3px
   );
-  opacity: 0.7;
 }
 
 .resize-sw {
-  bottom: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
+  bottom: -4px;
+  left: -4px;
+  width: 12px;
+  height: 12px;
   cursor: sw-resize;
+  border-radius: 0 0 0 12px;
 }
 
 .resize-sw::after {
   content: '';
   position: absolute;
-  bottom: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
+  bottom: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
   background: linear-gradient(
     45deg,
-    transparent 40%,
-    rgba(102, 126, 234, 0.6) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(102, 126, 234, 0.8) 50%,
+    transparent 70%
   );
-  background-size: 3px 3px;
-  opacity: 0.7;
+  background-size: 2px 2px;
 }
 
 .resize-w {
-  top: 48px;
-  left: 0;
+  top: 56px;
+  left: -4px;
   width: 8px;
-  bottom: 8px;
+  bottom: 20px;
   cursor: w-resize;
+  border-radius: 4px 0 0 4px;
 }
 
 .resize-w::after {
   content: '';
   position: absolute;
-  left: 2px;
+  left: 1px;
   top: 50%;
   transform: translateY(-50%);
-  width: 4px;
-  height: 20px;
+  width: 3px;
+  height: 30px;
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 2px,
-    rgba(102, 126, 234, 0.6) 2px,
-    rgba(102, 126, 234, 0.6) 4px
+    transparent 1px,
+    rgba(102, 126, 234, 0.8) 1px,
+    rgba(102, 126, 234, 0.8) 3px
   );
-  opacity: 0.7;
 }
 
 .resize-nw {
-  top: 48px;
-  left: 0;
-  width: 16px;
-  height: 16px;
+  top: 44px;
+  left: -4px;
+  width: 12px;
+  height: 12px;
   cursor: nw-resize;
+  border-radius: 12px 0 0 0;
 }
 
 .resize-nw::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
+  top: 1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
   background: linear-gradient(
     135deg,
-    transparent 40%,
-    rgba(102, 126, 234, 0.6) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(102, 126, 234, 0.8) 50%,
+    transparent 70%
   );
-  background-size: 3px 3px;
-  opacity: 0.7;
+  background-size: 2px 2px;
 }
 
 .resize-n {
-  top: 48px;
-  left: 16px;
-  right: 16px;
+  top: 44px;
+  left: 20px;
+  right: 20px;
   height: 8px;
   cursor: n-resize;
+  border-radius: 4px 4px 0 0;
 }
 
 .resize-n::after {
   content: '';
   position: absolute;
-  top: 2px;
+  top: 1px;
   left: 50%;
   transform: translateX(-50%);
-  width: 20px;
-  height: 4px;
+  width: 30px;
+  height: 3px;
   background: repeating-linear-gradient(
     90deg,
     transparent,
-    transparent 2px,
-    rgba(102, 126, 234, 0.6) 2px,
-    rgba(102, 126, 234, 0.6) 4px
+    transparent 1px,
+    rgba(102, 126, 234, 0.8) 1px,
+    rgba(102, 126, 234, 0.8) 3px
   );
-  opacity: 0.7;
 }
 
 .resize-ne {
-  top: 48px;
-  right: 0;
-  width: 16px;
-  height: 16px;
+  top: 44px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
   cursor: ne-resize;
+  border-radius: 0 12px 0 0;
 }
 
 .resize-ne::after {
   content: '';
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 12px;
-  height: 12px;
+  top: 1px;
+  right: 1px;
+  width: 8px;
+  height: 8px;
   background: linear-gradient(
     -135deg,
-    transparent 40%,
-    rgba(102, 126, 234, 0.6) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(102, 126, 234, 0.8) 50%,
+    transparent 70%
   );
-  background-size: 3px 3px;
-  opacity: 0.7;
+  background-size: 2px 2px;
 }
 
 /* Scrollbar styling */
