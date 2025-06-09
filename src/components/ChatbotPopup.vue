@@ -85,6 +85,31 @@
       class="resize-handle resize-e"
       @mousedown="(event) => startResize('e', event)"
     ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-sw"
+      @mousedown="(event) => startResize('sw', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-w"
+      @mousedown="(event) => startResize('w', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-nw"
+      @mousedown="(event) => startResize('nw', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-n"
+      @mousedown="(event) => startResize('n', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-ne"
+      @mousedown="(event) => startResize('ne', event)"
+    ></div>
   </div>
 </template>
 
@@ -241,18 +266,48 @@ export default {
                 const deltaX = event.clientX - this.resizeStart.x
                 const deltaY = event.clientY - this.resizeStart.y
 
+                let newWidth = this.size.width
+                let newHeight = this.size.height
+                let newX = this.position.x
+                let newY = this.position.y
+
+                // Handle horizontal resizing
                 if (this.resizeDirection.includes('e')) {
-                    this.size.width = Math.max(300, Math.min(
+                    newWidth = Math.max(300, Math.min(
                         window.innerWidth - this.position.x,
                         this.initialSize.width + deltaX
                     ))
                 }
+                if (this.resizeDirection.includes('w')) {
+                    const proposedWidth = this.initialSize.width - deltaX
+                    const minWidth = 300
+                    const maxWidth = this.initialPosition2.x + this.initialSize.width
+
+                    newWidth = Math.max(minWidth, Math.min(maxWidth, proposedWidth))
+                    newX = this.initialPosition2.x + this.initialSize.width - newWidth
+                }
+
+                // Handle vertical resizing
                 if (this.resizeDirection.includes('s')) {
-                    this.size.height = Math.max(200, Math.min(
+                    newHeight = Math.max(200, Math.min(
                         window.innerHeight - this.position.y,
                         this.initialSize.height + deltaY
                     ))
                 }
+                if (this.resizeDirection.includes('n')) {
+                    const proposedHeight = this.initialSize.height - deltaY
+                    const minHeight = 200
+                    const maxHeight = this.initialPosition2.y + this.initialSize.height
+
+                    newHeight = Math.max(minHeight, Math.min(maxHeight, proposedHeight))
+                    newY = this.initialPosition2.y + this.initialSize.height - newHeight
+                }
+
+                // Apply the new dimensions and position
+                this.size.width = newWidth
+                this.size.height = newHeight
+                this.position.x = newX
+                this.position.y = newY
             }
         },
 
@@ -601,7 +656,16 @@ export default {
 .resize-handle {
   position: absolute;
   background: transparent;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  background: rgba(102, 126, 234, 0.3);
+}
+
+.resize-handle:active {
+  background: rgba(102, 126, 234, 0.5);
 }
 
 .resize-se {
@@ -612,24 +676,200 @@ export default {
   cursor: se-resize;
 }
 
+.resize-se::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    -45deg,
+    transparent 40%,
+    rgba(102, 126, 234, 0.6) 50%,
+    transparent 60%
+  );
+  background-size: 3px 3px;
+  opacity: 0.7;
+}
+
 .resize-s {
   bottom: 0;
   left: 16px;
   right: 16px;
-  height: 6px;
+  height: 8px;
   cursor: s-resize;
+}
+
+.resize-s::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 2px,
+    rgba(102, 126, 234, 0.6) 2px,
+    rgba(102, 126, 234, 0.6) 4px
+  );
+  opacity: 0.7;
 }
 
 .resize-e {
   top: 48px;
   right: 0;
-  width: 6px;
-  bottom: 6px;
+  width: 8px;
+  bottom: 8px;
   cursor: e-resize;
 }
 
-.resize-handle:hover {
-  background: rgba(102, 126, 234, 0.2);
+.resize-e::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(102, 126, 234, 0.6) 2px,
+    rgba(102, 126, 234, 0.6) 4px
+  );
+  opacity: 0.7;
+}
+
+.resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  cursor: sw-resize;
+}
+
+.resize-sw::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    45deg,
+    transparent 40%,
+    rgba(102, 126, 234, 0.6) 50%,
+    transparent 60%
+  );
+  background-size: 3px 3px;
+  opacity: 0.7;
+}
+
+.resize-w {
+  top: 48px;
+  left: 0;
+  width: 8px;
+  bottom: 8px;
+  cursor: w-resize;
+}
+
+.resize-w::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(102, 126, 234, 0.6) 2px,
+    rgba(102, 126, 234, 0.6) 4px
+  );
+  opacity: 0.7;
+}
+
+.resize-nw {
+  top: 48px;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nw-resize;
+}
+
+.resize-nw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    rgba(102, 126, 234, 0.6) 50%,
+    transparent 60%
+  );
+  background-size: 3px 3px;
+  opacity: 0.7;
+}
+
+.resize-n {
+  top: 48px;
+  left: 16px;
+  right: 16px;
+  height: 8px;
+  cursor: n-resize;
+}
+
+.resize-n::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 2px,
+    rgba(102, 126, 234, 0.6) 2px,
+    rgba(102, 126, 234, 0.6) 4px
+  );
+  opacity: 0.7;
+}
+
+.resize-ne {
+  top: 48px;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: ne-resize;
+}
+
+.resize-ne::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    -135deg,
+    transparent 40%,
+    rgba(102, 126, 234, 0.6) 50%,
+    transparent 60%
+  );
+  background-size: 3px 3px;
+  opacity: 0.7;
 }
 
 /* Scrollbar styling */
