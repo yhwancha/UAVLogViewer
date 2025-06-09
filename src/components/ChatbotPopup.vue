@@ -1,96 +1,90 @@
 <template>
   <div
     v-if="isVisible"
-    class="chatbot-popup-overlay"
-    @mousedown="handleOverlayClick"
+    class="chatbot-popup"
+    ref="popup"
+    :style="popupStyle"
   >
+    <!-- Header with drag handle and controls -->
     <div
-      class="chatbot-popup"
-      ref="popup"
-      :style="popupStyle"
-      @mousedown.stop
+      class="popup-header"
+      @mousedown="startDrag"
+      ref="header"
     >
-      <!-- Header with drag handle and controls -->
-      <div
-        class="popup-header"
-        @mousedown="startDrag"
-        ref="header"
-      >
-        <div class="popup-title">
-          <i class="fas fa-robot"></i>
-          Flight Data Chatbot
-        </div>
-        <div class="popup-controls">
-          <button
-            class="control-btn minimize-btn"
-            @click="toggleMinimize"
-            :title="isMinimized ? 'Restore' : 'Minimize'"
-          >
-            <i :class="isMinimized ? 'fas fa-window-restore' : 'fas fa-window-minimize'"></i>
-          </button>
-          <button
-            class="control-btn close-btn"
-            @click="closePopup"
-            title="Close"
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+      <div class="popup-title">
+        <i class="fas fa-robot"></i>
+        Flight Data Chatbot
       </div>
+      <div class="popup-controls">
+        <button
+          class="control-btn minimize-btn"
+          @click="toggleMinimize"
+          :title="isMinimized ? 'Restore' : 'Minimize'"
+        >
+          <i :class="isMinimized ? 'fas fa-window-restore' : 'fas fa-window-minimize'"></i>
+        </button>
+        <button
+          class="control-btn close-btn"
+          @click="closePopup"
+          title="Close"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
 
-      <!-- Chatbot content -->
-      <div
-        v-if="!isMinimized"
-        class="popup-content"
-        :style="contentStyle"
-      >
-        <div class="chat-messages" ref="chatMessages">
-          <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
-            <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
-              <div v-if="message.isLoading" class="loading-spinner">
-                <div class="spinner"></div>
-              </div>
-              <span class="message-text">{{ message.text }}</span>
-              <span class="message-time">{{ message.time }}</span>
+    <!-- Chatbot content -->
+    <div
+      v-if="!isMinimized"
+      class="popup-content"
+      :style="contentStyle"
+    >
+      <div class="chat-messages" ref="chatMessages">
+        <div v-for="(message, index) in chatMessages" :key="index" class="chat-message" :class="message.type">
+          <div class="message-bubble" :class="{ 'loading-message': message.isLoading }">
+            <div v-if="message.isLoading" class="loading-spinner">
+              <div class="spinner"></div>
             </div>
+            <span class="message-text">{{ message.text }}</span>
+            <span class="message-time">{{ message.time }}</span>
           </div>
         </div>
-        <div class="chat-input-container">
-          <input
-            v-model="currentMessage"
-            @keyup.enter="sendMessage"
-            :placeholder="uploadingFile ? 'Analyzing flight data...' : 'Ask about flight data...'"
-            class="chat-input"
-            ref="chatInput"
-            :disabled="uploadingFile"
-          />
-          <button
-            @click="sendMessage"
-            class="send-button"
-            :disabled="!currentMessage.trim() || uploadingFile"
-          >
-            <i class="fas fa-paper-plane"></i>
-          </button>
-        </div>
       </div>
-
-      <!-- Resize handles -->
-      <div
-        v-if="!isMinimized"
-        class="resize-handle resize-se"
-        @mousedown="(event) => startResize('se', event)"
-      ></div>
-      <div
-        v-if="!isMinimized"
-        class="resize-handle resize-s"
-        @mousedown="(event) => startResize('s', event)"
-      ></div>
-      <div
-        v-if="!isMinimized"
-        class="resize-handle resize-e"
-        @mousedown="(event) => startResize('e', event)"
-      ></div>
+      <div class="chat-input-container">
+        <input
+          v-model="currentMessage"
+          @keyup.enter="sendMessage"
+          :placeholder="uploadingFile ? 'Analyzing flight data...' : 'Ask about flight data...'"
+          class="chat-input"
+          ref="chatInput"
+          :disabled="uploadingFile"
+        />
+        <button
+          @click="sendMessage"
+          class="send-button"
+          :disabled="!currentMessage.trim() || uploadingFile"
+        >
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
     </div>
+
+    <!-- Resize handles -->
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-se"
+      @mousedown="(event) => startResize('se', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-s"
+      @mousedown="(event) => startResize('s', event)"
+    ></div>
+    <div
+      v-if="!isMinimized"
+      class="resize-handle resize-e"
+      @mousedown="(event) => startResize('e', event)"
+    ></div>
   </div>
 </template>
 
@@ -161,7 +155,7 @@ export default {
         }
     },
     mounted () {
-    // Center popup on screen initially
+        // Center popup on screen initially
         this.centerPopup()
 
         // Add event listeners
@@ -170,18 +164,33 @@ export default {
 
         // Generate session ID
         this.sessionId = 'popup_' + Math.random().toString(36).substr(2, 9)
+
+        // Move popup to body to ensure it appears above Cesium
+        if (this.$el && this.$el.parentNode) {
+            document.body.appendChild(this.$el)
+        }
     },
     beforeDestroy () {
-    // Remove event listeners
+        // Remove event listeners
         document.removeEventListener('mousemove', this.handleMouseMove)
         document.removeEventListener('mouseup', this.handleMouseUp)
+
+        // Remove from body if it was appended there
+        if (this.$el && this.$el.parentNode === document.body) {
+            document.body.removeChild(this.$el)
+        }
     },
     methods: {
         centerPopup () {
             const screenWidth = window.innerWidth
             const screenHeight = window.innerHeight
-            this.position.x = (screenWidth - this.size.width) / 2
-            this.position.y = (screenHeight - this.size.height) / 2
+            // Position popup in bottom right corner with some margin
+            this.position.x = Math.max(20, screenWidth - this.size.width - 20)
+            this.position.y = Math.max(20, screenHeight - this.size.height - 20)
+
+            console.log('Popup positioned at:', this.position.x, this.position.y)
+            console.log('Popup size:', this.size.width, this.size.height)
+            console.log('Is visible:', this.isVisible)
         },
 
         closePopup () {
@@ -190,13 +199,6 @@ export default {
 
         toggleMinimize () {
             this.isMinimized = !this.isMinimized
-        },
-
-        handleOverlayClick (event) {
-            // Close popup when clicking outside
-            if (event.target.classList.contains('chatbot-popup-overlay')) {
-                this.closePopup()
-            }
         },
 
         // Dragging functionality
@@ -299,6 +301,7 @@ export default {
     },
     watch: {
         isVisible (newVal) {
+            console.log('ChatbotPopup visibility changed:', newVal)
             if (newVal) {
                 this.focusInput()
             }
@@ -313,124 +316,154 @@ export default {
 </script>
 
 <style scoped>
-.chatbot-popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.3);
-  z-index: 9999;
-  backdrop-filter: blur(2px);
-}
-
 .chatbot-popup {
-  position: absolute;
+  position: fixed;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  border: 1px solid #ddd;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
+  z-index: 1000000 !important;
 }
 
 .popup-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 8px 12px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: move;
   user-select: none;
-  height: 40px;
+  height: 48px;
   box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 
 .popup-title {
   display: flex;
   align-items: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
+  letter-spacing: 0.3px;
 }
 
 .popup-title i {
-  margin-right: 8px;
+  margin-right: 10px;
+  font-size: 16px;
 }
 
 .popup-controls {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .control-btn {
   background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
 }
 
 .control-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .close-btn:hover {
-  background: rgba(255, 0, 0, 0.6);
+  background: rgba(255, 59, 48, 0.8);
 }
 
 .popup-content {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: white;
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
-  background: #f8f9fa;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fafbfc;
   min-height: 0;
 }
 
 .chat-message {
-  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 8px;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-message.user {
-  text-align: right;
+  justify-content: flex-end;
+}
+
+.chat-message.assistant {
+  justify-content: flex-start;
 }
 
 .message-bubble {
-  display: inline-block;
-  max-width: 85%;
-  padding: 8px 12px;
+  max-width: 80%;
+  padding: 12px 16px;
   border-radius: 18px;
-  word-wrap: break-word;
   position: relative;
+  word-wrap: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.message-bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .chat-message.user .message-bubble {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #135388, #0f4369);
   color: white;
-  margin-left: auto;
+  border-bottom-right-radius: 6px;
 }
 
 .chat-message.assistant .message-bubble {
   background: white;
-  border: 1px solid #e0e0e0;
-  color: #333;
+  color: #2c3e50;
+  border: 1px solid #e1e8ed;
+  border-bottom-left-radius: 6px;
 }
 
 .loading-message {
-  opacity: 0.7;
+  opacity: 0.8;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
 }
 
 .loading-spinner {
@@ -439,10 +472,10 @@ export default {
 }
 
 .spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #667eea;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e1e8ed;
+  border-top: 2px solid #135388;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -454,117 +487,167 @@ export default {
 
 .message-text {
   display: block;
-  margin-bottom: 4px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 6px;
   white-space: pre-wrap;
+  font-weight: 400;
 }
 
 .message-time {
-  font-size: 10px;
-  opacity: 0.7;
+  display: block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 4px;
+  text-align: right;
+  font-weight: 500;
+}
+
+.chat-message.assistant .message-time {
+  text-align: left;
 }
 
 .chat-input-container {
   display: flex;
-  padding: 10px;
+  align-items: center;
+  padding: 16px 20px;
   background: white;
-  border-top: 1px solid #e0e0e0;
-  gap: 8px;
+  border-top: 1px solid #e1e8ed;
+  gap: 12px;
 }
 
 .chat-input {
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  outline: none;
+  border: 1px solid #e1e8ed;
+  border-radius: 24px;
+  padding: 12px 20px;
+  background: #f8f9fa;
+  color: #2c3e50;
   font-size: 14px;
+  font-weight: 400;
+  outline: none;
+  transition: all 0.3s ease;
+  line-height: 1.4;
 }
 
 .chat-input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  border-color: #135388;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(19, 83, 136, 0.1);
+  transform: translateY(-1px);
 }
 
 .chat-input:disabled {
   background-color: #f5f5f5;
   color: #999;
+  cursor: not-allowed;
+}
+
+.chat-input::placeholder {
+  color: #8e9aaf;
+  opacity: 0.9;
+  font-style: italic;
 }
 
 .send-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #135388, #0f4369);
   color: white;
   border: none;
-  width: 40px;
-  height: 40px;
   border-radius: 50%;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s;
+  transition: all 0.3s ease;
+  outline: none;
+  box-shadow: 0 4px 12px rgba(19, 83, 136, 0.3);
+  position: relative;
+  overflow: hidden;
 }
 
-.send-button:hover:not(:disabled) {
-  transform: scale(1.05);
+.send-button:not(:disabled):hover {
+  background: linear-gradient(135deg, #0f4369, #0a2f4d);
+  box-shadow: 0 6px 16px rgba(19, 83, 136, 0.4);
+  transform: translateY(-2px) scale(1.05);
+}
+
+.send-button:not(:disabled):active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: 0 2px 8px rgba(19, 83, 136, 0.3);
+}
+
+.send-button i {
+  font-size: 16px;
+  margin-left: 2px;
+  z-index: 1;
+  position: relative;
 }
 
 .send-button:disabled {
-  opacity: 0.5;
+  background: #bdc3c7;
   cursor: not-allowed;
+  box-shadow: none;
   transform: none;
+}
+
+.send-button:disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* Resize handles */
 .resize-handle {
   position: absolute;
   background: transparent;
+  transition: background-color 0.2s ease;
 }
 
 .resize-se {
   bottom: 0;
   right: 0;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   cursor: se-resize;
 }
 
 .resize-s {
   bottom: 0;
-  left: 15px;
-  right: 15px;
-  height: 5px;
+  left: 16px;
+  right: 16px;
+  height: 6px;
   cursor: s-resize;
 }
 
 .resize-e {
-  top: 40px;
+  top: 48px;
   right: 0;
-  width: 5px;
-  bottom: 5px;
+  width: 6px;
+  bottom: 6px;
   cursor: e-resize;
 }
 
 .resize-handle:hover {
-  background: rgba(102, 126, 234, 0.3);
+  background: rgba(102, 126, 234, 0.2);
 }
 
 /* Scrollbar styling */
 .chat-messages::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .chat-messages::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: #f1f3f4;
+  border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: #c1c8d1;
+  border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: #a1aab5;
 }
 </style>
