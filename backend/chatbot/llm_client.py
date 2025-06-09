@@ -70,7 +70,7 @@ class LLMClient:
                 self.openai_client.chat.completions.create,
                 model=self.model,
                 messages=messages,
-                max_tokens=1000,
+                max_tokens=300,
                 temperature=0.7,
                 timeout=30
             )

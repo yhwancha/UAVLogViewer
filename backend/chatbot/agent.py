@@ -301,12 +301,12 @@ Your capabilities include:
 - Explaining technical concepts in accessible language
 
 Instructions for analysis:
-1. USE THE PROVIDED FLIGHT DATA to answer questions with specific numbers, timestamps, and facts
-2. CORRELATE different data streams when relevant (e.g., altitude drops with error messages)
-3. PROVIDE CONTEXT for findings (e.g., "This voltage level is concerning because...")
-4. SUGGEST FOLLOW-UP analysis when appropriate
+1. KEEP RESPONSES CONCISE AND FOCUSED - aim for 2-3 sentences maximum
+2. USE THE PROVIDED FLIGHT DATA to answer questions with specific numbers, timestamps, and facts
+3. CORRELATE different data streams when relevant (e.g., altitude drops with error messages)
+4. PROVIDE CONTEXT for findings (e.g., "This voltage level is concerning because...")
 5. BE SPECIFIC with timestamps, values, and units
-6. EXPLAIN technical terms for users who may not be experts
+6. EXPLAIN technical terms briefly for users who may not be experts
 7. PRIORITIZE safety-related findings
 
 Data interpretation guidelines:
@@ -317,7 +317,7 @@ Data interpretation guidelines:
 - Timestamps: Seconds from flight start
 - Error severity: 1=Emergency, 2=Critical, 3=Error, 4=Warning
 
-Answer the user's question comprehensively using the provided flight data. If you need to make assumptions, state them clearly. Always ground your analysis in the actual data provided."""
+Answer the user's question directly and concisely using the provided flight data. If you need to make assumptions, state them briefly. Focus on the most important findings."""
 
     async def _handle_no_flight_data(self, message: str, conversation: ConversationState) -> Dict[str, Any]:
         """Handle queries when no flight data is available"""
@@ -363,7 +363,7 @@ Topics you can help with:
 - Flight planning and mission execution
 - Troubleshooting common UAV issues
 
-Provide helpful, accurate, and educational responses. If discussing safety-critical topics, emphasize safety considerations."""
+Keep responses concise and focused (2-3 sentences maximum). Provide helpful, accurate, and educational responses. If discussing safety-critical topics, emphasize safety considerations."""
         
         response = await self.llm_client.generate_response(message, context, system_prompt)
         
@@ -536,9 +536,9 @@ Key capabilities:
 - Provide educational information about UAV systems and flight operations
 
 Guidelines:
+- Keep responses concise and focused (2-3 sentences maximum)
 - Be precise and technical when analyzing data
-- Explain technical terms for less experienced users
-- Suggest follow-up questions to help users explore their data
+- Explain technical terms briefly for less experienced users
 - If you don't have specific data, clearly state what information you need
 - Always prioritize safety-related findings in your analysis"""
             
