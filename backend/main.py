@@ -59,16 +59,17 @@ async def debug_flight_store():
 
 @app.post("/upload-flight-log")
 async def upload_flight_log(file: UploadFile = File(...)):
-    """Upload and parse a MAVLink .bin flight log file"""
+    """Upload and parse a MAVLink flight log file (.bin or .tlog)"""
     try:
         logger.info(f"Received file upload request: {file.filename}")
         logger.info(f"Content type: {file.content_type}")
         
-        if not file.filename.endswith('.bin'):
+        # Support both .bin (DataFlash) and .tlog (telemetry) files
+        if not (file.filename.endswith('.bin') or file.filename.endswith('.tlog')):
             logger.warning(f"Invalid file type: {file.filename}")
             raise HTTPException(
                 status_code=400, 
-                detail="Only .bin files are supported"
+                detail="Only .bin and .tlog files are supported"
             )
         
         # Save uploaded file temporarily
@@ -143,7 +144,7 @@ async def chat_with_bot(message: ChatMessage):
         if not current_flight_data and "flight" in message.content.lower():
             logger.info("No flight data found, returning info message")
             return ChatResponse(
-                content="No flight data loaded. Please upload a .bin flight log file first.",
+                content="No flight data loaded. Please upload a .bin or .tlog flight log file first.",
                 message_type="info"
             )
         

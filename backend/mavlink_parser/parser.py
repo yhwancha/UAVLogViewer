@@ -18,11 +18,11 @@ class MAVLinkParser:
         ]
 
     async def parse_file(self, file_path: str) -> Dict[str, Any]:
-        """Parse an ArduPilot DataFlash .bin file and extract flight data"""
+        """Parse an ArduPilot DataFlash .bin file or MAVLink telemetry .tlog file and extract flight data"""
         try:
             logger.info(f"Starting to parse file: {file_path}")
             
-            # Open the DataFlash log file
+            # Open the MAVLink log file (supports both .bin and .tlog formats)
             mlog = mavutil.mavlink_connection(file_path)
             
             parsed_data = {
