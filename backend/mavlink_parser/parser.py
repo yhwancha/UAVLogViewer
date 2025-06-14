@@ -365,7 +365,7 @@ class MAVLinkParser:
                 return "No RC data available"
             
             elif query_type == "anomalies" or query_type == "flight_anomalies":
-                anomalies = await self.detect_anomalies(flight_data)
+                anomalies = await self.detect_patterns_and_changes(flight_data)
                 if anomalies:
                     result = f"Detected {len(anomalies)} flight anomalies:\n"
                     for anomaly in anomalies[:10]:  # Show top 10
@@ -435,185 +435,83 @@ class MAVLinkParser:
             logger.error(f"Error generating summary: {e}")
             return "Error generating flight summary"
 
-    async def detect_anomalies(self, flight_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Detect flight anomalies for LLM analysis"""
-        try:
-            anomalies = []
-            
-            # Get data arrays
-            altitude_data = flight_data.get('altitude_data', [])
-            battery_data = flight_data.get('battery_data', [])
-            gps_data = flight_data.get('gps_data', [])
-            attitude_data = flight_data.get('attitude_data', [])
-            errors = flight_data.get('errors', [])
-            
-            # 1. Altitude anomalies
-            if altitude_data:
-                altitudes = [d['altitude'] for d in altitude_data if d['altitude'] is not None]
-                timestamps = [d['timestamp'] for d in altitude_data if d['altitude'] is not None]
-                
-                if len(altitudes) > 10:
-                    # Check for sudden altitude drops (exclude normal landing)
-                    significant_drops = []
-                    for i in range(1, len(altitudes)):
-                        if i < len(timestamps):
-                            time_diff = timestamps[i] - timestamps[i-1] if i > 0 else 1
-                            altitude_diff = altitudes[i-1] - altitudes[i]
-                            
-                            # Only consider drops > 50m in less than 5 seconds as anomalies
-                            if altitude_diff > 50 and time_diff < 5:
-                                significant_drops.append({
-                                    'altitude_drop': altitude_diff,
-                                    'time_diff': time_diff,
-                                    'timestamp': timestamps[i],
-                                    'rate': altitude_diff / max(time_diff, 0.1)  # m/s
-                                })
-                    
-                    # Group consecutive drops into single events
-                    if significant_drops:
-                        # Only report the most severe drops (top 5)
-                        significant_drops.sort(key=lambda x: x['altitude_drop'], reverse=True)
-                        for drop in significant_drops[:5]:
-                            anomalies.append({
-                                'type': 'altitude_drop',
-                                'severity': 'high',
-                                'description': f'Sudden altitude drop of {drop["altitude_drop"]:.1f}m in {drop["time_diff"]:.1f}s (rate: {drop["rate"]:.1f}m/s)',
-                                'timestamp': drop['timestamp'],
-                                'value': drop['altitude_drop']
-                            })
-                    
-                    # Check for unusual altitude patterns
-                    max_alt = max(altitudes)
-                    if max_alt > 1000:  # Very high altitude
-                        anomalies.append({
-                            'type': 'high_altitude',
-                            'severity': 'medium',
-                            'description': f'Flight reached unusually high altitude: {max_alt:.1f}m',
-                            'value': max_alt
-                        })
-            
-            # 2. Battery anomalies
-            if battery_data:
-                voltages = [d['voltage'] for d in battery_data if d['voltage'] is not None and d['voltage'] > 0]
-                if voltages:
-                    min_voltage = min(voltages)
-                    voltage_range = max(voltages) - min(voltages)
-                    
-                    if min_voltage < 10:  # Very low voltage
-                        anomalies.append({
-                            'type': 'low_battery',
-                            'severity': 'high',
-                            'description': f'Battery voltage dropped to {min_voltage:.1f}V',
-                            'value': min_voltage
-                        })
-                    
-                    if voltage_range > 30:  # Unusual voltage swing
-                        anomalies.append({
-                            'type': 'voltage_instability',
-                            'severity': 'medium',
-                            'description': f'Large battery voltage variation: {voltage_range:.1f}V range',
-                            'value': voltage_range
-                        })
-            
-            # 3. GPS anomalies
-            gps_loss_count = flight_data.get('flight_stats', {}).get('gps_loss_events', 0)
-            if gps_loss_count > 10:
-                anomalies.append({
-                    'type': 'gps_instability',
-                    'severity': 'high',
-                    'description': f'Frequent GPS signal loss: {gps_loss_count} events',
-                    'value': gps_loss_count
-                })
-            
-            # 4. Critical error analysis
-            critical_errors = [e for e in errors if e['severity'] <= 3]
-            if critical_errors:
-                error_types = {}
-                for error in critical_errors:
-                    error_type = error['text']
-                    error_types[error_type] = error_types.get(error_type, 0) + 1
-                
-                for error_type, count in error_types.items():
-                    anomalies.append({
-                        'type': 'critical_error',
-                        'severity': 'high',
-                        'description': f'Critical error occurred {count} times: {error_type}',
-                        'value': count,
-                        'error_text': error_type
-                    })
-            
-            # 5. Attitude anomalies (extreme angles)
-            if attitude_data:
-                rolls = [d['roll'] for d in attitude_data if d['roll'] is not None]
-                pitches = [d['pitch'] for d in attitude_data if d['pitch'] is not None]
-                
-                if rolls:
-                    max_roll = max(abs(r) for r in rolls)
-                    if max_roll > 60:  # Extreme roll angle
-                        anomalies.append({
-                            'type': 'extreme_attitude',
-                            'severity': 'medium',
-                            'description': f'Extreme roll angle detected: {max_roll:.1f}°',
-                            'value': max_roll
-                        })
-                
-                if pitches:
-                    max_pitch = max(abs(p) for p in pitches)
-                    if max_pitch > 45:  # Extreme pitch angle
-                        anomalies.append({
-                            'type': 'extreme_attitude',
-                            'severity': 'medium',
-                            'description': f'Extreme pitch angle detected: {max_pitch:.1f}°',
-                            'value': max_pitch
-                        })
-            
-            # Sort by severity
-            severity_order = {'high': 0, 'medium': 1, 'low': 2}
-            anomalies.sort(key=lambda x: severity_order.get(x['severity'], 3))
-            
-            return anomalies
-            
-        except Exception as e:
-            logger.error(f"Error detecting anomalies: {e}")
-            return []
+    # Deprecated: Use detect_patterns_and_changes and generate_agentic_anomaly_prompt for agentic anomaly analysis
+    # async def detect_anomalies(self, flight_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    #     """DEPRECATED: Use agentic pattern extraction and LLM reasoning instead."""
+    #     ...
 
-    async def generate_anomaly_report(self, flight_data: Dict[str, Any]) -> str:
-        """Generate a human-readable anomaly report for LLM analysis"""
-        try:
-            anomalies = await self.detect_anomalies(flight_data)
-            
-            if not anomalies:
-                return "No significant flight anomalies detected. The flight appears to have operated within normal parameters."
-            
-            report_parts = []
-            
-            # Group by severity
-            high_severity = [a for a in anomalies if a['severity'] == 'high']
-            medium_severity = [a for a in anomalies if a['severity'] == 'medium']
-            
-            if high_severity:
-                report_parts.append("HIGH SEVERITY ISSUES:")
-                for anomaly in high_severity:
-                    report_parts.append(f"- {anomaly['description']}")
-            
-            if medium_severity:
-                report_parts.append("\nMEDIUM SEVERITY ISSUES:")
-                for anomaly in medium_severity:
-                    report_parts.append(f"- {anomaly['description']}")
-            
-            # Add recommendations
-            report_parts.append("\nRECOMMENDATIONS:")
-            if any(a['type'] == 'critical_error' for a in anomalies):
-                report_parts.append("- Review system logs for critical errors and address underlying causes")
-            if any(a['type'] == 'gps_instability' for a in anomalies):
-                report_parts.append("- Check GPS antenna placement and interference sources")
-            if any(a['type'] == 'low_battery' for a in anomalies):
-                report_parts.append("- Inspect battery condition and charging system")
-            if any(a['type'] == 'altitude_drop' for a in anomalies):
-                report_parts.append("- Investigate flight controller performance and sensor calibration")
-            
-            return "\n".join(report_parts)
-            
-        except Exception as e:
-            logger.error(f"Error generating anomaly report: {e}")
-            return "Error generating anomaly analysis report." 
+    # async def generate_anomaly_report(self, flight_data: Dict[str, Any]) -> str:
+    #     """DEPRECATED: Use agentic pattern extraction and LLM reasoning instead."""
+    #     ...
+
+    async def detect_patterns_and_changes(self, flight_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Instead of hardcoded anomaly detection, extract patterns and changes for LLM-based reasoning.
+        Returns a dict summarizing key changes and patterns in the data.
+        """
+        patterns = {}
+
+        # Altitude changes
+        altitude_data = flight_data.get('altitude_data', [])
+        if altitude_data:
+            altitudes = [d['altitude'] for d in altitude_data if d['altitude'] is not None]
+            timestamps = [d['timestamp'] for d in altitude_data if d['altitude'] is not None]
+            if len(altitudes) > 1:
+                diffs = [altitudes[i] - altitudes[i-1] for i in range(1, len(altitudes))]
+                max_drop = min(diffs)
+                max_rise = max(diffs)
+                patterns['altitude_changes'] = {
+                    'max_drop': max_drop,
+                    'max_rise': max_rise,
+                    'all_diffs': diffs[:100]  # limit for brevity
+                }
+
+        # Battery voltage changes
+        battery_data = flight_data.get('battery_data', [])
+        if battery_data:
+            voltages = [d['voltage'] for d in battery_data if d['voltage'] is not None]
+            if len(voltages) > 1:
+                diffs = [voltages[i] - voltages[i-1] for i in range(1, len(voltages))]
+                patterns['battery_voltage_changes'] = {
+                    'max_drop': min(diffs),
+                    'max_rise': max(diffs),
+                    'all_diffs': diffs[:100]
+                }
+
+        # GPS fix pattern
+        gps_data = flight_data.get('gps_data', [])
+        if gps_data:
+            fix_types = [d.get('fix_type', 3) for d in gps_data]
+            patterns['gps_fix_types'] = fix_types[:100]
+
+        # Attitude changes
+        attitude_data = flight_data.get('attitude_data', [])
+        if attitude_data:
+            rolls = [d['roll'] for d in attitude_data if d['roll'] is not None]
+            pitches = [d['pitch'] for d in attitude_data if d['pitch'] is not None]
+            patterns['attitude_rolls'] = rolls[:100]
+            patterns['attitude_pitches'] = pitches[:100]
+
+        # Error messages
+        errors = flight_data.get('errors', [])
+        if errors:
+            patterns['error_messages'] = [e['text'] for e in errors[:20]]
+
+        return patterns
+
+    async def generate_agentic_anomaly_prompt(self, flight_data: Dict[str, Any]) -> str:
+        """
+        Generate a prompt for an LLM to reason about anomalies, based on extracted patterns and changes.
+        """
+        patterns = await self.detect_patterns_and_changes(flight_data)
+
+        prompt = (
+            "You are an expert drone flight data analyst. "
+            "Given the following patterns and changes extracted from a UAV flight log, "
+            "identify any anomalies, inconsistencies, or safety concerns. "
+            "Do not rely on fixed thresholds; instead, reason about what might be unusual or risky. "
+            "Explain your reasoning and suggest possible causes or recommendations.\n\n"
+            f"Patterns and changes:\n{patterns}\n\n"
+            "Your analysis:"
+        )
+        return prompt 

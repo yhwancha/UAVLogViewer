@@ -83,30 +83,48 @@ class LLMClient:
 
     def _generate_fallback_response(self, message: str) -> str:
         """Generate a basic response when OpenAI is not available"""
-        
         message_lower = message.lower()
-        
-        # Rule-based responses for common flight data queries
         if any(word in message_lower for word in ['altitude', 'height', 'high']):
-            return "To analyze altitude data, I need access to the OpenAI service. Please ensure your OPENAI_API_KEY is set correctly in the .env file. I can examine GLOBAL_POSITION_INT messages from your flight log to provide altitude analysis."
-        
+            return (
+                "I'm unable to analyze altitude data right now because the AI analysis service is not available. "
+                "Please check your OpenAI API key in the .env file and try again. "
+                "Once enabled, I can provide detailed altitude insights from your flight log."
+            )
         elif any(word in message_lower for word in ['battery', 'power', 'voltage']):
-            return "Battery analysis requires AI processing that's currently unavailable. Please check your OpenAI API configuration. I can analyze BATTERY_STATUS messages including voltage, current, and temperature data."
-        
+            return (
+                "Battery analysis is currently unavailable because the AI service is not connected. "
+                "Please verify your OpenAI API configuration. "
+                "With AI enabled, I can analyze battery voltage, current, and temperature from your log."
+            )
         elif any(word in message_lower for word in ['gps', 'satellite', 'navigation']):
-            return "GPS analysis needs AI capabilities to provide detailed insights. Please verify your OpenAI API key is configured. I can examine GPS_RAW_INT messages for signal quality and loss events."
-        
+            return (
+                "GPS data analysis requires the AI service, which is not active at the moment. "
+                "Please ensure your OpenAI API key is set up correctly. "
+                "When enabled, I can provide insights on GPS signal quality and loss events."
+            )
         elif any(word in message_lower for word in ['time', 'duration']):
-            return "Flight duration analysis is available, but detailed insights require OpenAI integration. Please check your API configuration. Duration is calculated from message timestamps."
-        
+            return (
+                "I can provide basic flight duration, but for advanced analysis, please enable the AI service by configuring your OpenAI API key. "
+                "Duration is calculated from message timestamps in your log."
+            )
         elif any(word in message_lower for word in ['error', 'critical', 'warning']):
-            return "Critical error analysis requires AI processing. Please ensure your OpenAI API key is properly configured. I can examine STATUSTEXT messages for emergency and critical events."
-        
+            return (
+                "Error and warning analysis is not available because the AI service is not connected. "
+                "Please check your OpenAI API key. "
+                "With AI enabled, I can examine log messages for critical events and warnings."
+            )
         elif any(word in message_lower for word in ['hello', 'hi', 'help']):
-            return "Hello! I'm your UAV flight data analyst. Currently running in limited mode - please configure your OPENAI_API_KEY in the .env file for full AI-powered analysis capabilities."
-        
+            return (
+                "Hello! I'm your UAV flight data assistant. "
+                "Currently, advanced AI-powered analysis is disabled. "
+                "To unlock full features, please set your OpenAI API key in the .env file."
+            )
         else:
-            return "I can help analyze your flight data, but I need OpenAI API access for detailed insights. Please set your OPENAI_API_KEY in the .env file. I can examine altitude, battery, GPS, errors, and flight duration from uploaded .bin files."
+            return (
+                "I'm unable to provide detailed flight data analysis right now because the AI service is not available. "
+                "Please configure your OpenAI API key in the .env file to enable advanced insights, anomaly detection, and comprehensive flight reports. "
+                "I can still help with basic questions about your log file format and setup."
+            )
 
     def is_available(self) -> bool:
         """Check if OpenAI client is available and configured"""

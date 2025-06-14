@@ -62,35 +62,55 @@ class ChatbotAgent:
                                          conversation: ConversationState) -> Dict[str, Any]:
         """Handle any question about flight data with comprehensive LLM analysis"""
         try:
+            from mavlink_parser.parser import MAVLinkParser
+            parser = MAVLinkParser()
             # First, try to get direct data using the parser for specific queries
             direct_answer = await self._try_direct_query(message, flight_data)
-            
+
+            # Analyze query intent for agentic anomaly reasoning
+            query_intent = await self.llm_client._analyze_query_intent(message)
+            if query_intent.get('query_type') in ['anomalies', 'flight_anomalies', 'issues', 'problems', 'unusual', 'anything wrong', 'spot issues', 'detect problems']:
+                # Use agentic anomaly prompt
+                agentic_prompt = await parser.generate_agentic_anomaly_prompt(flight_data)
+                # Add conversation history for context
+                conversation_context = self._format_conversation_history(conversation)
+                if conversation_context != "No previous conversation.":
+                    agentic_prompt += f"\n\nConversation History:\n{conversation_context}"
+                response = await self.llm_client.generate_response(
+                    message,
+                    agentic_prompt,
+                    "You are an expert UAV flight data analyst. Use the provided patterns and changes to reason about possible anomalies, issues, or safety concerns. Do not use fixed thresholds; instead, explain your reasoning and suggest recommendations."
+                )
+                conversation.add_message('assistant', response)
+                return {
+                    'content': response,
+                    'type': 'response',
+                    'data': {
+                        'has_flight_data': True,
+                        'analysis_method': 'agentic_anomaly_reasoning'
+                    }
+                }
+
             # Prepare comprehensive flight data context for LLM
             detailed_context = await self._prepare_comprehensive_flight_context(flight_data)
-            
             # Create enhanced system prompt for flight data analysis
             system_prompt = self._get_enhanced_flight_analysis_prompt()
-            
             # Build the full context including direct answer if available
             full_context = detailed_context
             if direct_answer:
                 full_context += f"\n\nDirect Query Result: {direct_answer}"
-            
             # Add conversation history
             conversation_context = self._format_conversation_history(conversation)
             if conversation_context != "No previous conversation.":
                 full_context += f"\n\nConversation History:\n{conversation_context}"
-            
             # Generate LLM response with comprehensive context
             response = await self.llm_client.generate_response(
                 message, 
                 full_context, 
                 system_prompt
             )
-            
             # Add response to conversation history
             conversation.add_message('assistant', response)
-            
             return {
                 'content': response,
                 'type': 'response',
@@ -99,7 +119,6 @@ class ChatbotAgent:
                     'analysis_method': 'comprehensive_llm_analysis'
                 }
             }
-            
         except Exception as e:
             logger.error(f"Error in flight data analysis: {e}")
             return {
