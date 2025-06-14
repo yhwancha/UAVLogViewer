@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class LLMClient:
     def __init__(self):
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-4.1-nano')
         self.openai_client = None
         self._initialize_client()
 
