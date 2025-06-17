@@ -65,15 +65,6 @@ async def root():
 async def health_check():
     return {"status": "healthy", "version": "1.0.0"}
 
-@app.get("/debug/flight-store")
-async def debug_flight_store():
-    keys = await redis.keys("*:*")
-    chat_keys = await redis.keys("chat_history:*:*")
-    return {
-        "flight_store_keys": keys,
-        "chat_history_keys": chat_keys
-    }
-
 @app.post("/upload-flight-log")
 async def upload_flight_log(
     file: UploadFile = File(...),
@@ -148,24 +139,6 @@ async def upload_flight_log(
         logger.error(f"Error processing file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
-async def get_flight_data(filename: str, timestamp: str):
-    if not filename or not timestamp:
-        return None
-    redis_key = f"{filename}:{timestamp}"
-    data = await redis.get(redis_key)
-    if not data:
-        return None
-    return json.loads(data)
-
-async def get_chat_history(filename: str, timestamp: str):
-    key = f"chat_history:{filename}:{timestamp}"
-    data = await redis.get(key)
-    return json.loads(data) if data else []
-
-async def save_chat_history(filename: str, timestamp: str, history: list):
-    key = f"chat_history:{filename}:{timestamp}"
-    await redis.set(key, json.dumps(history, default=convert_datetime), ex=86400)
-
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_bot(
     message: ChatMessage,
@@ -219,30 +192,24 @@ async def get_flight_summary(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading summary: {str(e)}")
 
-@app.post("/query-flight-data")
-async def query_flight_data(
-    query: FlightDataQuery,
-    filename: str = Query(..., description="Flight log file name (e.g., log1.bin)"),
-    timestamp: str = Query(..., description="Upload timestamp (e.g., 20240607T153000)")
-):
-    """Query specific flight data"""
-    try:
-        current_flight_data = await get_flight_data(filename, timestamp)
-        if not current_flight_data:
-            raise HTTPException(status_code=404, detail="Flight data not found")
-        
-        # Execute the query
-        result = await QueryHandler.execute_query(current_flight_data, query.query_type, query.parameters)
-        
-        return {
-            "query_type": query.query_type,
-            "result": result,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Error executing query: {e}")
-        raise HTTPException(status_code=500, detail=f"Error executing query: {str(e)}")
+
+async def get_flight_data(filename: str, timestamp: str):
+    if not filename or not timestamp:
+        return None
+    redis_key = f"{filename}:{timestamp}"
+    data = await redis.get(redis_key)
+    if not data:
+        return None
+    return json.loads(data)
+
+async def get_chat_history(filename: str, timestamp: str):
+    key = f"chat_history:{filename}:{timestamp}"
+    data = await redis.get(key)
+    return json.loads(data) if data else []
+
+async def save_chat_history(filename: str, timestamp: str, history: list):
+    key = f"chat_history:{filename}:{timestamp}"
+    await redis.set(key, json.dumps(history, default=convert_datetime), ex=86400)
 
 if __name__ == "__main__":
     uvicorn.run(
