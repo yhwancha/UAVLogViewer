@@ -10,7 +10,9 @@ import datetime
 import json
 import redis.asyncio as aioredis
 
-from chatbot.agent import ChatbotAgent
+from agent.agent_manager import ChatbotAgent
+from agent.query_handler import QueryHandler
+from llm.llm_client import LLMClient
 from mavlink_parser.parser import MAVLinkParser
 from models.chat_models import ChatMessage, ChatResponse, FlightDataQuery
 
@@ -223,17 +225,24 @@ async def query_flight_data(
     filename: str = Query(..., description="Flight log file name (e.g., log1.bin)"),
     timestamp: str = Query(..., description="Upload timestamp (e.g., 20240607T153000)")
 ):
-    """Execute specific queries against flight data"""
-    current_flight_data = await get_flight_data(filename, timestamp)
-    
-    if not current_flight_data:
-        raise HTTPException(status_code=404, detail="No flight data loaded for this file/timestamp")
-    
+    """Query specific flight data"""
     try:
-        result = await mavlink_parser.execute_query(current_flight_data, query.query_type, query.parameters)
-        return {"result": result}
+        current_flight_data = await get_flight_data(filename, timestamp)
+        if not current_flight_data:
+            raise HTTPException(status_code=404, detail="Flight data not found")
+        
+        # Execute the query
+        result = await QueryHandler.execute_query(current_flight_data, query.query_type, query.parameters)
+        
+        return {
+            "query_type": query.query_type,
+            "result": result,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query error: {str(e)}")
+        logger.error(f"Error executing query: {e}")
+        raise HTTPException(status_code=500, detail=f"Error executing query: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(

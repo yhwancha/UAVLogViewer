@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -7,6 +7,8 @@ class ChatMessage(BaseModel):
     session_id: str = Field(alias="sessionId")
     timestamp: Optional[datetime] = None
     user_id: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 class ChatResponse(BaseModel):
     content: str
