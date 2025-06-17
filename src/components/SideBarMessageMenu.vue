@@ -440,14 +440,20 @@ export default {
         },
         async callChatbotAPI (message) {
             try {
-                if (!this.sessionId) {
+                // Generate sessionId using filename and timestamp from localStorage
+                const filename = localStorage.getItem('flight_filename')
+                const flightTimestamp = localStorage.getItem('flight_timestamp')
+                if (filename && flightTimestamp) {
+                    this.sessionId = `${filename}:${flightTimestamp}`
+                } else if (!this.sessionId) {
                     this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
                 }
 
                 // Add typing indicator
                 this.addTypingIndicator(false)
 
-                const response = await fetch('http://localhost:8001/chat', {
+                // Send chat request with filename and timestamp as query parameters
+                const response = await fetch(`http://localhost:8001/chat?filename=${encodeURIComponent(filename)}&timestamp=${encodeURIComponent(flightTimestamp)}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -702,7 +708,14 @@ export default {
                     timestamp: new Date().toISOString()
                 }
 
-                const response = await fetch('http://localhost:8001/chat', {
+                // Get filename and timestamp from localStorage
+                const filename = localStorage.getItem('flight_filename')
+                const flightTimestamp = localStorage.getItem('flight_timestamp')
+                if (!filename || !flightTimestamp) {
+                    throw new Error('No flight log uploaded or missing filename/timestamp in localStorage.')
+                }
+
+                const response = await fetch(`http://localhost:8001/chat?filename=${encodeURIComponent(filename)}&timestamp=${encodeURIComponent(flightTimestamp)}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

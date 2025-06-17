@@ -177,44 +177,53 @@ export default {
             // Upload .bin files to backend for LLM analysis
             this.uploadToBackend(file)
         },
+        generateTimestamp () {
+            const now = new Date()
+            // Format: YYYYMMDDTHHmmss
+            const pad = n => n.toString().padStart(2, '0')
+            return now.getFullYear().toString() +
+                pad(now.getMonth() + 1) +
+                pad(now.getDate()) + 'T' +
+                pad(now.getHours()) +
+                pad(now.getMinutes()) +
+                pad(now.getSeconds())
+        },
         async uploadToBackend (file) {
             if (!file.name.endsWith('.bin')) {
                 return
             }
-
             try {
-                // Emit loading start event
+                // Generate timestamp and store filename/timestamp in localStorage
+                const timestamp = this.generateTimestamp()
+                localStorage.setItem('flight_filename', file.name)
+                localStorage.setItem('flight_timestamp', timestamp)
                 this.$eventHub.$emit('flightDataUploadStarted', {
-                    filename: file.name
+                    filename: file.name,
+                    timestamp: timestamp
                 })
-
                 const formData = new FormData()
                 formData.append('file', file)
-
-                const response = await fetch('http://localhost:8001/upload-flight-log', {
+                const response = await fetch(`http://localhost:8001/upload-flight-log?timestamp=${timestamp}`, {
                     method: 'POST',
                     body: formData
                 })
-
                 if (!response.ok) {
                     console.error('Backend upload failed:', response.status)
-                    // Emit error event
                     this.$eventHub.$emit('flightDataUploadError', {
                         filename: file.name,
+                        timestamp: timestamp,
                         error: `Upload failed with status: ${response.status}`
                     })
                     return
                 }
-
                 const data = await response.json()
-
                 this.$eventHub.$emit('flightDataUploaded', {
                     filename: file.name,
+                    timestamp: timestamp,
                     flightInfo: data.flight_info
                 })
             } catch (error) {
                 console.error('Error uploading to backend:', error)
-                // Emit error event
                 this.$eventHub.$emit('flightDataUploadError', {
                     filename: file.name,
                     error: error.message
@@ -223,41 +232,38 @@ export default {
         },
         async uploadSampleToBackend (arrayBuffer, filename) {
             try {
-                // Emit loading start event
+                const timestamp = this.generateTimestamp()
+                localStorage.setItem('flight_filename', filename)
+                localStorage.setItem('flight_timestamp', timestamp)
                 this.$eventHub.$emit('flightDataUploadStarted', {
-                    filename: filename
+                    filename: filename,
+                    timestamp: timestamp
                 })
-
                 const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' })
                 const file = new File([blob], filename, { type: 'application/octet-stream' })
-
                 const formData = new FormData()
                 formData.append('file', file)
-
-                const response = await fetch('http://localhost:8001/upload-flight-log', {
+                const response = await fetch(`http://localhost:8001/upload-flight-log?timestamp=${timestamp}`, {
                     method: 'POST',
                     body: formData
                 })
-
                 if (!response.ok) {
                     console.error('Backend sample upload failed:', response.status)
-                    // Emit error event
                     this.$eventHub.$emit('flightDataUploadError', {
                         filename: filename,
+                        timestamp: timestamp,
                         error: `Sample upload failed with status: ${response.status}`
                     })
                     return
                 }
-
                 const data = await response.json()
-
                 this.$eventHub.$emit('flightDataUploaded', {
                     filename: filename,
+                    timestamp: timestamp,
                     flightInfo: data.flight_info
                 })
             } catch (error) {
                 console.error('Error uploading sample to backend:', error)
-                // Emit error event
                 this.$eventHub.$emit('flightDataUploadError', {
                     filename: filename,
                     error: error.message

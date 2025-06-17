@@ -202,7 +202,13 @@ export default {
         document.addEventListener('mouseup', this.handleMouseUp)
 
         // Generate session ID
-        this.sessionId = 'popup_' + Math.random().toString(36).substr(2, 9)
+        const filename = localStorage.getItem('flight_filename')
+        const timestamp = localStorage.getItem('flight_timestamp')
+        if (filename && timestamp) {
+            this.sessionId = `${filename}:${timestamp}`
+        } else {
+            this.sessionId = 'popup_' + Math.random().toString(36).substr(2, 9)
+        }
 
         // Move popup to body to ensure it appears above Cesium
         if (this.$el && this.$el.parentNode) {
